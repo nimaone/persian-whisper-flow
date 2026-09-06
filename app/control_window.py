@@ -9,6 +9,7 @@ import tkinter as tk
 import customtkinter as ctk
 
 from app import theme
+from app.config import APP_VERSION
 from app.win32 import style_toplevel, smooth_show
 from app.theme import apply_icon
 
@@ -64,6 +65,10 @@ class ControlWindow:
         self.hint_var = tk.StringVar(value="")
         ctk.CTkLabel(c, textvariable=self.hint_var, font=(self.fam, 9),
                      text_color=theme.FG_DIM, anchor="e").pack(fill="x", pady=(10, 0))
+
+        # نسخه برنامه — ریز، گوشه پایین-چپ
+        ctk.CTkLabel(c, text=f"v{APP_VERSION}", font=(self.fam, 8),
+                     text_color=theme.FG_DIM, anchor="w").pack(side="left", pady=(4, 0))
 
         self._state = "loading"
         smooth_show(self.win)  # نمایش نرم — بدون فریم سفید
