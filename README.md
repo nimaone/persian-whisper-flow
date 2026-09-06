@@ -28,6 +28,19 @@
 - درج متن با کلیپ‌بورد (با بازیابی محتوای قبلی) یا تایپ مستقیم یونیکد
 - رابط کاربری فارسی RTL، تم Fluent تیره، بدون فلش سفید هنگام باز شدن
 
+## نمای برنامه
+
+| | |
+|---|---|
+| <img src="docs/screenshots/main.png" width="300" alt="پنجره اصلی"> | <img src="docs/screenshots/overlay.png" width="420" alt="پنجره زنده دیکته"> |
+| **پنجره اصلی** — وضعیت و شروع/توقف ضبط | **پنجره زنده** — متن در حال تشخیص کنار موس |
+| <img src="docs/screenshots/settings_general.png" width="300" alt="تنظیمات عمومی"> | <img src="docs/screenshots/settings_mic.png" width="300" alt="تنظیمات میکروفون"> |
+| **تنظیمات — عمومی** | **تنظیمات — میکروفون** (تست زنده با اسپیکتر) |
+| <img src="docs/screenshots/settings_insert.png" width="300" alt="تنظیمات درج متن"> | <img src="docs/screenshots/settings_advanced.png" width="300" alt="تنظیمات پیشرفته"> |
+| **تنظیمات — درج متن** | **تنظیمات — پیشرفته** (واژه‌های حساس/هات‌وورد) |
+| <img src="docs/screenshots/settings_help.png" width="300" alt="تنظیمات راهنما"> | |
+| **تنظیمات — راهنما** | |
+
 ## نصب و اجرا
 
 ```bash

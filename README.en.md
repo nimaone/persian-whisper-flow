@@ -28,6 +28,19 @@ Farsi (Persian) speech-to-text dictation, fully offline and local — triggered 
 - Text insertion via clipboard (with previous-content restore) or direct Unicode typing
 - RTL Persian UI, dark Fluent theme, no white flash on launch
 
+## Screenshots
+
+| | |
+|---|---|
+| <img src="docs/screenshots/main.png" width="300" alt="Main window"> | <img src="docs/screenshots/overlay.png" width="420" alt="Live overlay"> |
+| **Main window** — status and record toggle | **Live overlay** — text appears as you speak |
+| <img src="docs/screenshots/settings_general.png" width="300" alt="General settings"> | <img src="docs/screenshots/settings_mic.png" width="300" alt="Microphone settings"> |
+| **Settings — General** | **Settings — Microphone** (live spectrum test) |
+| <img src="docs/screenshots/settings_insert.png" width="300" alt="Insert settings"> | <img src="docs/screenshots/settings_advanced.png" width="300" alt="Advanced settings"> |
+| **Settings — Text insertion** | **Settings — Advanced** (hotwords) |
+| <img src="docs/screenshots/settings_help.png" width="300" alt="Help settings"> | |
+| **Settings — Help** | |
+
 ## Install & Run
 
 ```bash
