@@ -167,7 +167,7 @@ def open_settings(parent_root, app=None):
             return parts[0].startswith("f") and parts[0][1:].isdigit()
         return True
 
-    HINT_TXT = "روی کادر کلیک کن و ترکیب دلخواه را بفشار (Esc = لغو)"
+    HINT_TXT = "برای ثبت میان‌بر جدید، روی کادر کلیک کن و ترکیب دلخواه را بفشار (لغو: Esc)"
 
     def capture_hotkey(event):
         key = event.keysym.lower()
@@ -311,7 +311,7 @@ def open_settings(parent_root, app=None):
     cr = card(t_mic, "رفتار ضبط")
     row = ctk.CTkFrame(cr, fg_color="transparent")
     row.pack(fill="x")
-    ctk.CTkLabel(row, text="توقف خودکار پس از سکوت:", font=(fam, 13),
+    ctk.CTkLabel(row, text="توقف خودکار پس از سکوت", font=(fam, 13),
                  text_color=theme.FG, anchor="e").pack(side="right")
     auto_stop_labels = {v: k for k, v in AUTO_STOP_LABELS.items()}
     var_auto_stop = tk.StringVar(value=auto_stop_labels.get(int(cfg.get("auto_stop_sec") or 0), "خاموش"))
@@ -407,7 +407,7 @@ def open_settings(parent_root, app=None):
     var_itn = tk.BooleanVar(value=bool(cfg.get("persian_itn")))
     ctk.CTkSwitch(cv2, text="تبدیل اعداد حروفی به رقم", variable=var_itn,
                   **switch_style).pack(anchor="e", pady=(8, 0))
-    dim(cv2, "«بیست و سه» → ۲۳ — اعداد تکی مثل «یک» حروفی می‌مانند")
+    dim(cv2, "اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ اعداد تکی مثل «یک» حروفی می‌مانند")
 
     # ================= تب پیشرفته =================
     t_adv = tabview.tab("پیشرفته")
@@ -415,11 +415,21 @@ def open_settings(parent_root, app=None):
     ca = card(t_adv, "پردازش")
     arow = ctk.CTkFrame(ca, fg_color="transparent")
     arow.pack(fill="x")
-    ctk.CTkLabel(arow, text="تعداد هسته پردازش مدل (با ری‌استارت اعمال می‌شود):",
+    ctk.CTkLabel(arow, text="تعداد هسته پردازش مدل (با ری‌استارت اعمال می‌شود)",
                  font=(fam, 13), text_color=theme.FG, anchor="e").pack(side="right")
     var_threads = tk.StringVar(value=str(int(cfg.get("num_threads") or 4)))
     ctk.CTkOptionMenu(arow, values=[str(i) for i in range(1, 9)], variable=var_threads,
                       width=80, height=34, **menu_style).pack(side="left")
+
+    ch_hw = card(t_adv, "واژه‌های حساس (هات‌وورد) — آزمایشی")
+    var_hotword = tk.BooleanVar(value=bool(cfg.get("hotword_boost")))
+    ctk.CTkSwitch(ch_hw, text="تقویت واژه‌های مشخص هنگام تشخیص",
+                  variable=var_hotword, **switch_style).pack(anchor="e", pady=(0, 6))
+    txt_hotwords = ctk.CTkTextbox(ch_hw, height=110, font=(fam, 13))
+    txt_hotwords.pack(fill="x")
+    txt_hotwords.insert("1.0", "\n".join(str(w) for w in (cfg.get("hotwords") or [])))
+    dim(ch_hw, "هر خط یک واژه، حداقل ۲ حرف — اسم‌ها و برندهایی که مدل مدام اشتباه می‌گیرد")
+    dim(ch_hw, "با روشن‌کردن، پردازش کمی کندتر می‌شود و ممکن است نشانه‌های پایانی جمله (مثل نقطه) هم درج شوند")
 
     cm_info = card(t_adv, "درباره موتور تشخیص")
     ctk.CTkLabel(cm_info, text="Shenava-Koochik v1.0", font=(fam, 13, "bold"),
@@ -436,26 +446,28 @@ def open_settings(parent_root, app=None):
     )
     t_help.pack(fill="both", expand=True)
 
-    ch = card(t_help, f"{APP_TITLE_FULL} — نسخه {APP_VERSION}")
+    _fa_ver = str(APP_VERSION).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+    ch = card(t_help, f"{APP_TITLE_FULL} — نسخه {_fa_ver}")
     dim(ch, "دیکته صوتی فارسی، کاملاً آفلاین — تجربه‌ای شبیه ویسپر فلو")
     dim(ch, "مدل شنوا کوچیک، ۱۱۴ میلیون پارامتر — هیچ داده‌ای از سیستم شما خارج نمی‌شود")
 
     c1 = card(t_help, "استفاده سریع")
-    dim(c1, "۱ — در هر برنامه‌ای (نوت‌پد، تلگرام، مرورگر…) کلید میان‌بر را بزن")
-    dim(c1, "۲ — صحبت کن؛ پنجره زنده کنار موس متن را همزمان نشان می‌دهد")
-    dim(c1, "۳ — همان کلید را دوباره بزن تا متن در محل کرسر درج شود")
+    dim(c1, "گام اول — در هر برنامه‌ای (نوت‌پد، تلگرام، مرورگر…) کلید میان‌بر را بزن")
+    dim(c1, "گام دوم — صحبت کن؛ پنجره زنده کنار موس متن را همزمان نشان می‌دهد")
+    dim(c1, "گام سوم — همان کلید را دوباره بزن تا متن در محل کرسر درج شود")
 
     c2 = card(t_help, "فرمان‌های صوتی")
     dim(c2, "بگو «نقطه» یا «ویرگول» یا «علامت سوال» تا نشانه درج شود")
     dim(c2, "«گیومه باز» و «گیومه بسته» برای « »، «نقطه ویرگول» برای ؛")
-    dim(c2, "برای رفتن به خط بعد، «خط جدید» را بگو (کلید Enter)")
+    dim(c2, "برای رفتن به خط بعد، «خط جدید» را بگو")
     dim(c2, "«حذف آخرین کلمه» آخرین کلمه درج‌شده را پاک می‌کند")
 
     c3 = card(t_help, "نکته‌ها")
-    dim(c3, "ثبت میان‌بر انحصاری است؛ کلید انتخابی فقط برای این اپ مصرف می‌شود و به برنامه مقصد نمی‌رسد — اگر تداخل داشت، از تب عمومی عوضش کن")
-    dim(c3, "اگر برنامه مقصد با دسترسی مدیر اجرا شده باشد، درج کار نمی‌کند (محدودیت ویندوز) — اپ را هم با دسترسی مدیر اجرا کنید یا روش درج را عوض کنید")
-    dim(c3, "اگر دستگاه ورودی را عوض کردی، در تب میکروفون انتخاب یا «خودکار» را نگه دار")
-    dim(c3, "اعداد حروفی («بیست و سه») خودکار به رقم (۲۳) تبدیل می‌شوند — از تب درج متن خاموشش کن")
+    dim(c3, "کلید میان‌بر فقط برای همین اپ مصرف می‌شود و به برنامه مقصد فرستاده نمی‌شود")
+    dim(c3, "اگر با میان‌بر برنامه دیگری تداخل داشت، از تب عمومی یک ترکیب تازه بگیر")
+    dim(c3, "در برنامه‌هایی که با دسترسی مدیر باز شده‌اند درج کار نمی‌کند؛ اپ را هم مدیر اجرا کن یا روش درج را عوض کن")
+    dim(c3, "اگر میکروفون را عوض کردی، از تب میکروفون دستگاه را انتخاب کن یا حالت خودکار را نگه دار")
+    dim(c3, "اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ خاموش یا روشن‌کردنش از تب درج متن است")
 
     # ================= دکمه‌های ثابت پایین =================
     btn_bar = tk.Frame(win, bg=theme.BG, padx=18, pady=8)
@@ -480,6 +492,9 @@ def open_settings(parent_root, app=None):
         font_lbl.set(f"اندازه متن: {int(var_font.get())}")
         sample.configure(font=(fam, int(var_font.get())))
         var_auto_stop.set(auto_stop_labels.get(int(data.get("auto_stop_sec") or 0), "خاموش"))
+        var_hotword.set(bool(data.get("hotword_boost")))
+        txt_hotwords.delete("1.0", "end")
+        txt_hotwords.insert("1.0", "\n".join(str(w) for w in (data.get("hotwords") or [])))
 
     def reset():
         _sync(dict(DEFAULTS))
@@ -505,6 +520,15 @@ def open_settings(parent_root, app=None):
         cfg.set("overlay_font_size", int(var_font.get()))
         cfg.set("auto_stop_sec", AUTO_STOP_LABELS.get(var_auto_stop.get(), 0))
         cfg.set("input_device", selected_device())
+        hw_on = bool(var_hotword.get())
+        hw_list = [ln.strip() for ln in txt_hotwords.get("1.0", "end").splitlines()
+                   if len(ln.strip()) >= 2]
+        if hw_on and not hw_list:
+            hk_hint.configure(text="حالت واژه‌های حساس روشن است ولی هیچ واژه‌ای وارد نشده",
+                              text_color=theme.DANGER)
+            return
+        cfg.set("hotword_boost", hw_on)
+        cfg.set("hotwords", hw_list)
         cfg.save()
         set_autostart(var_autostart.get())
         tester.stop()
