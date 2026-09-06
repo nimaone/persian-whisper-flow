@@ -6,7 +6,7 @@
 
 </div>
 
-# DikteYar (دیکته‌یار) — repo: persian-whisper-flow
+# DikteYar (دیکته‌یار)
 
 Farsi (Persian) speech-to-text dictation, fully offline and local — triggered by a global hotkey from any app. A Wispr Flow–like experience, without a single byte of audio ever leaving your machine.
 
