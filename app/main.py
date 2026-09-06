@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 from app import persian_itn, voice_commands
 from app.asr import LiveTranscriber, load_engine
-from app.config import APP_TITLE, Config, set_autostart
+from app.config import APP_TITLE, Config, model_dir, set_autostart
 from app.control_window import ControlWindow
 from app.overlay import Overlay
 from app.paster import insert_text, send_key
@@ -62,6 +62,7 @@ class App:
         self._tray = None
         self._hotkey_registered = ""
         self._silence_t0 = None  # زمان شروع سکوت فعلی (برای توقف خودکار)
+        self._engine_dirty = False  # تنظیمات هات‌وورد عوض شده — پس از ضبط rebuild شود
 
     # ---------- راه‌اندازی ----------
     def start(self):
@@ -80,11 +81,35 @@ class App:
         # حلقه UI — تنها جایی که به Tkinter دست می‌زنیم (thread اصلی)
         self._ui_loop()
 
+    def _hotwords(self) -> list[str]:
+        try:
+            words = list(self.cfg.get("hotwords") or [])
+        except Exception:
+            words = []
+        return [str(w) for w in words if len(str(w).strip()) >= 2]
+
+    def _make_engine(self):
+        """موتور متناسب با تنظیمات: هات‌وورد (beam) یا عادی (گری‌دی sherpa).
+
+        اگر حالت هات‌وورد خواسته شده ولی موتورش ساخته نشد (وابستگی/مدل)،
+        با اطلاع‌رسانی به موتور عادی برمی‌گردیم تا اپ بی‌کار نماند.
+        """
+        if self.cfg.get("hotword_boost") and self._hotwords():
+            try:
+                from app.hotword_asr import load_hotword_engine
+                return load_hotword_engine(
+                    model_dir=model_dir(),
+                    num_threads=int(self.cfg.get("num_threads") or 4),
+                    hotwords=self._hotwords(),
+                )
+            except Exception as e:
+                self._notify(f"حالت واژه‌های حساس فعال نشد؛ موتور عادی: {str(e)[:60]}")
+        return load_engine(num_threads=int(self.cfg.get("num_threads") or 4))
+
     def _load_model(self):
         for attempt in range(3):
             try:
-                self.engine = load_engine(
-                    num_threads=int(self.cfg.get("num_threads") or 4))
+                self.engine = self._make_engine()
                 self.live = LiveTranscriber(self.engine)
                 with self._state_lock:
                     if self.state in (STATE_LOADING, STATE_STARTING):
@@ -308,6 +333,9 @@ class App:
         with self._state_lock:
             self.state = STATE_IDLE if self.live else STATE_LOADING
         self._ui_set_state(self.state)
+        # اگر تنظیمات هات‌وورد وسط ضبط عوض شده بود، الان جای امن برای تعویض موتور است
+        if self._engine_dirty:
+            threading.Thread(target=self._rebuild_engine, daemon=True).start()
         # بستن overlay بعد از ترنسکرایپ نهایی (قبل از درج)
         self.ui_q.put(("hide", None))
         if not text:
@@ -405,8 +433,10 @@ class App:
 
     def apply_config(self):
         """بعد از ذخیره‌ی تنظیمات — hotkey و autostart را اعمال کن."""
+        old_key = self._engine_key  # قبل از خواندن تنظیمات جدید
         # پنجره تنظیمات کپی خودش را روی دیسک می‌نویسد؛ تنظیمات تازه باید از دیسک خوانده شود
         self.cfg = Config.load()
+        new_key = self._engine_key
         self.apply_hotkey()
         set_autostart(bool(self.cfg.get("autostart")))
         dev = self.cfg.get("input_device")
@@ -418,7 +448,40 @@ class App:
         else:
             self.device = int(dev)
             self._device_ready.set()
+        # تغییر حالت/لیست هات‌وورد → موتور باید عوض شود؛ وسط ضبط ممنوع، بعداً در _finish
+        if new_key != old_key and self.state in (STATE_RECORDING, STATE_TRANSCRIBING):
+            self._engine_dirty = True
+        elif new_key != old_key and self.live is not None:
+            threading.Thread(target=self._rebuild_engine, daemon=True).start()
         # پنجره کنترل hint کلید میانبر را تازه کند
+        self._ui_set_state(self.state)
+
+    @property
+    def _engine_key(self):
+        """امضای تنظیماتی که نوع موتور را تعیین می‌کند."""
+        return (bool(self.cfg.get("hotword_boost")), tuple(self._hotwords()))
+
+    def _rebuild_engine(self):
+        """تعویض موتور در thread پس‌زمینه — مثل استارتاپ: LOADING → IDLE."""
+        with self._state_lock:
+            if self.state in (STATE_RECORDING, STATE_TRANSCRIBING):
+                self._engine_dirty = True
+                return
+            if self.state not in (STATE_IDLE,):
+                return  # در حال لود اولیه — دست نزنیم
+            self.state = STATE_LOADING
+        self._ui_set_state(self.state)
+        try:
+            engine = self._make_engine()
+            live = LiveTranscriber(engine)
+        except Exception:
+            self._ui_set_state(self.state)
+            return
+        self.engine = engine
+        self.live = live
+        self._engine_dirty = False
+        with self._state_lock:
+            self.state = STATE_IDLE
         self._ui_set_state(self.state)
 
     def quit(self):
