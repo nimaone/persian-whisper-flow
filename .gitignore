@@ -1,0 +1,13 @@
+# python
+__pycache__/
+*.py[cod]
+.venv/
+
+# مدل — از HuggingFace دانلود می‌شود (438MB)
+model/
+
+# صوت آزمایشی
+spikes/test_audio/
+
+# لاگ‌های محلی
+*.log
