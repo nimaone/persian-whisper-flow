@@ -127,7 +127,7 @@ python -m venv .venv
 ```
 
 - بازتولید لوگو: `.venv\Scripts\python spikes\make_logo.py` (خروجی: `assets/logo.png` و `assets/logo.ico`)
-- تست ترنسکرایپ CLI: `spikes/transcribe_cli.py` — ضبط آزمایشی: `spikes/record_cli.py` — تولید صوت آزمایشی: `spikes/gen_test_wav.py` — A/B هات‌وورد: `spikes/hotword_test.py` (کلیپ‌های تست: `spikes/test_app/`)
+- تست ترنسکرایپ CLI: `spikes/transcribe_cli.py` — ضبط آزمایشی: `spikes/record_cli.py` — تولید صوت آزمایشی: `spikes/gen_test_wav.py` — A/B هات‌وورد: `spikes/hotword_test.py` (کلیپ‌های تست در `spikes/test_app/` — لوکال، داخل گیت نیست)
 
 ## لایسنس و سپاس‌ها
 

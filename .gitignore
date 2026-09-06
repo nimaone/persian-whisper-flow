@@ -11,6 +11,7 @@ model/*
 
 # صوت آزمایشی
 spikes/test_audio/
+spikes/test_app/
 *.wav
 
 # لاگ‌های محلی
