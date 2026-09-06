@@ -1,6 +1,16 @@
-# وِیس‌فلو فارسی (WhisperFlow Farsi)
+<div align="center">
+
+<img src="assets/logo.png" width="128" alt="لوگوی دیکته‌یار">
+
+**فارسی** | [English](README.en.md)
+
+</div>
+
+# دیکته‌یار (DikteYar) — ریپو: persian-whisper-flow
 
 دیکته‌ی گفتار فارسی، کاملاً آفلاین و لوکال — با یک کلید میانبر از هر برنامه‌ای. تجربه‌ای شبیه Wispr Flow، بدون اینکه حتی یک بایت صدا از سیستم شما خارج شود.
+
+> 💚 **با سپاس فراوان از [Reza2kn](https://github.com/Reza2kn)** سازنده‌ی مدل [شنوا کوچیک (Shenava Koochik v1.0)](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0) که قلب این اپ است. این پروژه بدون مدل متن‌باز و باکیفیت ایشان وجود نداشت. اگر این اپ برایتان مفید بود، لطفاً مدل و [پروژه Shenava-1](https://github.com/Reza2kn/shenava-1) ایشان را هم ستاره کنید.
 
 - **مدل**: Shenava-Koochik v1.0 (FastConformer NeMo CTC، ۱۱۴M پارامتر) از طریق sherpa-onnx
 - **زبان**: Python 3.12 — رابط کاربری CustomTkinter (بدون وابستگی GUI سنگین)
@@ -89,11 +99,11 @@ spikes/             ابزارهای CLI تست + اسکریپت تولید لو
 - تشخیص خودکار میکروفون: در استارتاپ همه‌ی دستگاه‌های ورودی با ۰.۳۵s probe سنجیده می‌شوند و پرسیگنال‌ترین انتخاب می‌شود.
 - درج با کلیپ‌بورد انجام می‌شود و متن قبلی بعد از درج (~۶۰۰ms برای برنامه‌های کند مثل Electron) بازیابی می‌گردد.
 - پنجره‌ها با DWM عنوان تیره و گوشه‌ی گرد دارند و با alpha-fade بدون فلش سفید ظاهر می‌شوند.
-- تنظیمات در `%APPDATA%\WhisperFlowFarsi\settings.json` ذخیره می‌شود (کلیدها: `hotkey`، `paste_method`، `voice_commands`، `restore_clipboard`، `sound_feedback`، `overlay_enabled`، `overlay_font_size`، `auto_stop_sec`، `input_device`، `autostart`، `num_threads`).
+- تنظیمات در `%APPDATA%\WhisperFlowFarsi\settings.json` ذخیره می‌شود (کلیدها: `hotkey`، `paste_method`، `voice_commands`، `persian_itn`، `restore_clipboard`، `sound_feedback`، `overlay_enabled`، `overlay_font_size`، `auto_stop_sec`، `input_device`، `autostart`، `num_threads`).
+- **ITN فارسی**: اعداد حروفی («بیست و سه»، «سی‌وپنج»، «سه ممیز چهارده») هنگام درج به رقم (۲۳، ۳۵، ۳٫۱۴) تبدیل می‌شوند — از تب «درج متن» در تنظیمات قابل خاموش‌کردن است. اعداد تکی کوچک («یک»، «هشت») عمداً حروفی می‌مانند تا متن طبیعی بماند.
 
 ## محدودیت‌ها
 
-- اعداد به‌صورت حروفی درمی‌آیند («بیست و سه» → ۲۳ تبدیل نمی‌شود) — ITN فارسی در نسخه بعد.
 - در برنامه‌های run-as-administrator درج کار نمی‌کند (محدودیت ویندوز).
 - بازیابی کلیپ‌بوردِ غیرمتنی (عکس/فایل) ممکن نیست — در آن حالت متن دیکته در کلیپ‌بورد می‌ماند.
 - کیفیت روی جملات دیکته‌شده بهتر از مکالمه‌ی آزاد است.
@@ -116,3 +126,11 @@ python -m venv .venv
 
 - بازتولید لوگو: `.venv\Scripts\python spikes\make_logo.py` (خروجی: `assets/logo.png` و `assets/logo.ico`)
 - تست ترنسکرایپ CLI: `spikes/transcribe_cli.py` — ضبط آزمایشی: `spikes/record_cli.py` — تولید صوت آزمایشی: `spikes/gen_test_wav.py`
+
+## لایسنس و سپاس‌ها
+
+- کد این اپ («دیکته‌یار»): **MIT** — فایل [LICENSE](LICENSE)
+- مدل «شنوا کوچیک v1.0» (Shenava Koochik v1.0) اثر Reza2kn: **Apache-2.0** — فایل [model/LICENSE](model/LICENSE)
+  · [نسخه sherpa-onnx مدل](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) · [پروژه Shenava-1](https://github.com/Reza2kn/shenava-1)
+- جزئیات کامل مدل (پارامترها، دیتاست‌های آموزش، متریک‌ها): [model/README.md](model/README.md)
+- انتساب همه‌ی اجزای ثالث: [NOTICE](NOTICE)
