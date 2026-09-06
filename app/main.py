@@ -1,4 +1,4 @@
-"""وِیس‌فلو فارسی — نقطه ورود.
+"""دیکته‌یار (ویسپر فلوی فارسی) — نقطه ورود.
 
 اپ ترِی: کلید میانبر جهانی → ضبط با نمایش زنده → ترنسکرایپ → درج در برنامه فعال.
 
@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 from app import persian_itn, voice_commands
 from app.asr import LiveTranscriber, load_engine
-from app.config import Config, set_autostart
+from app.config import APP_TITLE, Config, set_autostart
 from app.control_window import ControlWindow
 from app.overlay import Overlay
 from app.paster import insert_text, send_key
@@ -132,7 +132,7 @@ class App:
             pystray.MenuItem("خروج", lambda *_: self.quit()),
         )
         self._tray = pystray.Icon(
-            "WhisperFlowFarsi", self._tray_icon(), "وِیس‌فلو فارسی (در حال بارگذاری)", menu
+            "WhisperFlowFarsi", self._tray_icon(), f"{APP_TITLE} (در حال بارگذاری)", menu
         )
         threading.Thread(target=self._tray.run, daemon=True).start()
 
@@ -147,18 +147,18 @@ class App:
         """به‌روزرسانی پنجره کنترل + tray — از هر thread، UI از طریق صف."""
         self.ui_q.put(("cstate", state))
         titles = {
-            "loading": "وِیس‌فلو فارسی (در حال بارگذاری)",
-            "idle": "وِیس‌فلو فارسی — آماده",
-            "recording": "وِیس‌فلو فارسی — در حال ضبط",
-            "transcribing": "وِیس‌فلو فارسی — در حال تشخیص",
-            "starting": "وِیس‌فلو فارسی",
+            "loading": f"{APP_TITLE} (در حال بارگذاری)",
+            "idle": f"{APP_TITLE} — آماده",
+            "recording": f"{APP_TITLE} — در حال ضبط",
+            "transcribing": f"{APP_TITLE} — در حال تشخیص",
+            "starting": APP_TITLE,
         }
-        self._tray_set_state(titles.get(state, "وِیس‌فلو فارسی"))
+        self._tray_set_state(titles.get(state, APP_TITLE))
 
     def _notify(self, text: str):
         if self._tray:
             try:
-                self._tray.notify(text, "وِیس‌فلو فارسی")
+                self._tray.notify(text, APP_TITLE)
             except Exception:
                 pass
 

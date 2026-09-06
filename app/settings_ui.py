@@ -14,7 +14,7 @@ import customtkinter as ctk
 import numpy as np
 
 from app import theme
-from app.config import APP_NAME, APP_VERSION, DEFAULTS, Config, set_autostart
+from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config, set_autostart
 from app.recorder import detect_best_device
 from app.win32 import style_toplevel, smooth_show, disable_min_max
 from app.theme import apply_icon
@@ -74,7 +74,7 @@ def open_settings(parent_root, app=None):
     fam = theme.family()
 
     win = tk.Toplevel(parent_root)
-    win.title(f"تنظیمات — {APP_NAME}")
+    win.title(f"تنظیمات — {APP_TITLE}")
     win.geometry("560x640")
     win.minsize(520, 560)
     win.attributes("-topmost", True)
@@ -436,7 +436,7 @@ def open_settings(parent_root, app=None):
     )
     t_help.pack(fill="both", expand=True)
 
-    ch = card(t_help, f"وِیس‌فلو فارسی — نسخه {APP_VERSION}")
+    ch = card(t_help, f"{APP_TITLE_FULL} — نسخه {APP_VERSION}")
     dim(ch, "دیکته صوتی فارسی، کاملاً آفلاین — مثل Wispr Flow")
     dim(ch, "مدل: Shenava-Koochik v1.0 (sherpa-onnx) — هیچ داده‌ای از سیستم شما خارج نمی‌شود")
 

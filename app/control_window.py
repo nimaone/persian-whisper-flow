@@ -9,7 +9,7 @@ import tkinter as tk
 import customtkinter as ctk
 
 from app import theme
-from app.config import APP_VERSION
+from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION
 from app.win32 import style_toplevel, smooth_show
 from app.theme import apply_icon
 
@@ -18,7 +18,7 @@ class ControlWindow:
     def __init__(self, root: tk.Tk):
         self.fam = theme.family()
         self.win = tk.Toplevel(root)
-        self.win.title("وِیس‌فلو فارسی")
+        self.win.title(APP_TITLE)
         self.win.geometry("360x250")
         self.win.minsize(320, 230)
         self.win.configure(bg=theme.BG)
@@ -31,7 +31,7 @@ class ControlWindow:
         # هدر: نام اپ (راست) + وضعیت (چپ)
         head = ctk.CTkFrame(c, fg_color="transparent")
         head.pack(fill="x")
-        ctk.CTkLabel(head, text="وِیس‌فلو فارسی", font=(self.fam, 14, "bold"),
+        ctk.CTkLabel(head, text=APP_TITLE_FULL, font=(self.fam, 14, "bold"),
                      text_color=theme.FG).pack(side="right")
         self.state_var = tk.StringVar(value="در حال بارگذاری")
         self.state_lbl = ctk.CTkLabel(head, textvariable=self.state_var,

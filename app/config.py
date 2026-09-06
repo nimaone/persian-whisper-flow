@@ -7,7 +7,9 @@ import sys
 import winreg
 from pathlib import Path
 
-APP_NAME = "WhisperFlowFarsi"
+APP_NAME = "WhisperFlowFarsi"  # فقط مسیر %APPDATA% و کلید رجیستری autostart — تغییرش مهاجرت تنظیمات می‌خواهد
+APP_TITLE = "دیکته‌یار"  # نام نمایشی کوتاه — نوار عنوان، تسک‌بار و tray
+APP_TITLE_FULL = "دیکته‌یار (ویسپر فلوی فارسی)"  # فرم کامل — هدر صفحه اصلی و راهنما
 APP_VERSION = "1.1.0"
 
 DEFAULTS = {
