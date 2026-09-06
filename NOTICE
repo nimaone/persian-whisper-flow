@@ -1,0 +1,31 @@
+DikteYar (دیکته‌یار) — repository: persian-whisper-flow
+Copyright 2026 DikteYar contributors
+
+This product includes the "Shenava Koochik v1.0" (شنوا کوچیک) automatic
+speech recognition model, created by Reza2kn as part of the Shenava-1 /
+VisualEars project, and licensed under the Apache License, Version 2.0.
+
+  Model (FP32 NeMo checkpoint):
+    https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0
+
+  Model (sherpa-onnx export — redistributed by this project, unmodified):
+    https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx
+
+  Project hub:
+    https://github.com/Reza2kn/shenava-1
+
+The model files model/model.onnx and model/tokens.txt are redistributed
+under the Apache License, Version 2.0; see model/LICENSE for the full
+license text. The model is used unmodified.
+
+--------------------------------------------------------------------
+Third-party runtime dependencies (kept unmodified):
+
+  sherpa-onnx        Apache License 2.0        https://github.com/k2-fsa/sherpa-onnx
+  numpy              BSD 3-Clause              https://github.com/numpy/numpy
+  sounddevice        MIT                       https://github.com/python-sounddevice/sounddevice
+  keyboard           MIT                       https://github.com/boppreh/keyboard
+  pyperclip          BSD                       https://github.com/asweigart/pyperclip
+  pystray            LGPLv3                    https://github.com/moses-palmer/pystray
+  Pillow             HPND                      https://github.com/python-pillow/Pillow
+  customtkinter      MIT                       https://github.com/TomSchimansky/CustomTkinter
