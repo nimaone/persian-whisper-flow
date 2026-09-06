@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 from PIL import Image, ImageDraw
 
-from app import voice_commands
+from app import persian_itn, voice_commands
 from app.asr import LiveTranscriber, load_engine
 from app.config import Config, set_autostart
 from app.control_window import ControlWindow
@@ -272,6 +272,8 @@ class App:
                 try:
                     buf = rec.get_tail_16k(self.live.window_sec)
                     text = self.live.partial(buf)
+                    if self.cfg.get("persian_itn"):
+                        text = persian_itn.normalize_text(text, min_tokens=2)
                     self.ui_q.put(("text", text))
                     # توقف خودکار پس از سکوت — فقط اگر قبلاً صدایی شنیده شده
                     if auto_stop > 0:
@@ -315,6 +317,8 @@ class App:
         self._insert(text)
 
     def _insert(self, text: str):
+        if self.cfg.get("persian_itn"):
+            text = persian_itn.normalize_text(text, min_tokens=2)
         method = self.cfg.get("paste_method")
         restore = bool(self.cfg.get("restore_clipboard"))
         if self.cfg.get("voice_commands"):

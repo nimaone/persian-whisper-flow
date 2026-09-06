@@ -8,12 +8,13 @@ import winreg
 from pathlib import Path
 
 APP_NAME = "WhisperFlowFarsi"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 DEFAULTS = {
     "hotkey": "ctrl+shift+space",
     "paste_method": "clipboard",  # clipboard | type
     "voice_commands": True,
+    "persian_itn": True,         # تبدیل اعداد حروفی به رقم («بیست و سه» → ۲۳)
     "input_device": None,  # None = تشخیص خودکار
     "autostart": False,
     "overlay_enabled": True,

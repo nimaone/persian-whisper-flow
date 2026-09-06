@@ -404,6 +404,10 @@ def open_settings(parent_root, app=None):
     ctk.CTkSwitch(cv2, text="فرمان‌های صوتی", variable=var_commands,
                   **switch_style).pack(anchor="e", pady=(8, 0))
     dim(cv2, "نقطه، ویرگول، علامت سوال، گیومه باز/بسته، نقطه ویرگول، خط جدید، حذف آخرین کلمه")
+    var_itn = tk.BooleanVar(value=bool(cfg.get("persian_itn")))
+    ctk.CTkSwitch(cv2, text="تبدیل اعداد حروفی به رقم", variable=var_itn,
+                  **switch_style).pack(anchor="e", pady=(8, 0))
+    dim(cv2, "«بیست و سه» → ۲۳ — اعداد تکی مثل «یک» حروفی می‌مانند")
 
     # ================= تب پیشرفته =================
     t_adv = tabview.tab("پیشرفته")
@@ -451,7 +455,7 @@ def open_settings(parent_root, app=None):
     dim(c3, "میان‌بر با suppress ثبت می‌شود؛ اگر با میان‌بر برنامه‌ای تداخل داشت از تب عمومی عوضش کن")
     dim(c3, "در برنامه‌های run-as-administrator درج کار نمی‌کند (محدودیت ویندوز)")
     dim(c3, "اگر دستگاه ورودی را عوض کردی، در تب میکروفون انتخاب یا «خودکار» را نگه دار")
-    dim(c3, "اعداد فعلاً حروفی نوشته می‌شوند («بیست و سه») — تبدیل به رقم در نسخه بعد")
+    dim(c3, "اعداد حروفی («بیست و سه») خودکار به رقم (۲۳) تبدیل می‌شوند — از تب درج متن خاموشش کن")
 
     # ================= دکمه‌های ثابت پایین =================
     btn_bar = tk.Frame(win, bg=theme.BG, padx=18, pady=8)
@@ -466,6 +470,7 @@ def open_settings(parent_root, app=None):
         dev_combo.set(auto_label)
         var_paste.set(data.get("paste_method"))
         var_commands.set(bool(data.get("voice_commands")))
+        var_itn.set(bool(data.get("persian_itn")))
         var_restore.set(bool(data.get("restore_clipboard")))
         var_sound.set(bool(data.get("sound_feedback")))
         var_overlay.set(bool(data.get("overlay_enabled")))
@@ -488,6 +493,7 @@ def open_settings(parent_root, app=None):
         cfg.set("hotkey", new_hotkey)
         cfg.set("paste_method", var_paste.get())
         cfg.set("voice_commands", var_commands.get())
+        cfg.set("persian_itn", var_itn.get())
         cfg.set("restore_clipboard", var_restore.get())
         cfg.set("sound_feedback", var_sound.get())
         cfg.set("overlay_enabled", var_overlay.get())
