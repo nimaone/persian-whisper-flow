@@ -187,7 +187,7 @@ def open_settings(parent_root, app=None):
         # تک‌کلیدیِ بدون modifier تایپ عادی ویندوز را می‌شکند — فقط F-key مجاز است
         if not mods and not (key.startswith("f") and key[1:].isdigit()):
             var_hotkey.set(prev_hotkey)
-            hk_hint.configure(text="ترکیب باید Ctrl یا Alt یا Shift داشته باشد (یا کلید F)",
+            hk_hint.configure(text="ترکیب باید شامل کلید ترکیبی (کنترل، آلت یا شیفت) باشد، یا یک کلید F",
                               text_color=theme.DANGER)
             return "break"
         var_hotkey.set("+".join(mods + [key]))
@@ -415,7 +415,7 @@ def open_settings(parent_root, app=None):
     ca = card(t_adv, "پردازش")
     arow = ctk.CTkFrame(ca, fg_color="transparent")
     arow.pack(fill="x")
-    ctk.CTkLabel(arow, text="تعداد thread پردازش مدل (با ری‌استارت اعمال می‌شود):",
+    ctk.CTkLabel(arow, text="تعداد هسته پردازش مدل (با ری‌استارت اعمال می‌شود):",
                  font=(fam, 13), text_color=theme.FG, anchor="e").pack(side="right")
     var_threads = tk.StringVar(value=str(int(cfg.get("num_threads") or 4)))
     ctk.CTkOptionMenu(arow, values=[str(i) for i in range(1, 9)], variable=var_threads,
@@ -424,7 +424,7 @@ def open_settings(parent_root, app=None):
     cm_info = card(t_adv, "درباره موتور تشخیص")
     ctk.CTkLabel(cm_info, text="Shenava-Koochik v1.0", font=(fam, 13, "bold"),
                  text_color=theme.FG, anchor="e").pack(fill="x")
-    dim(cm_info, "FastConformer NeMo CTC — ۱۱۴M پارامتر — کاملاً آفلاین")
+    dim(cm_info, "کاملاً آفلاین — ۱۱۴ میلیون پارامتر (معماری FastConformer)")
     dim(cm_info, "کیفیت روی جملات دیکته‌شده بهتر از مکالمه آزاد است")
 
     # ================= تب راهنما (اسکرول‌شونده — محتوای بلند) =================
@@ -437,23 +437,23 @@ def open_settings(parent_root, app=None):
     t_help.pack(fill="both", expand=True)
 
     ch = card(t_help, f"{APP_TITLE_FULL} — نسخه {APP_VERSION}")
-    dim(ch, "دیکته صوتی فارسی، کاملاً آفلاین — مثل Wispr Flow")
-    dim(ch, "مدل: Shenava-Koochik v1.0 (sherpa-onnx) — هیچ داده‌ای از سیستم شما خارج نمی‌شود")
+    dim(ch, "دیکته صوتی فارسی، کاملاً آفلاین — تجربه‌ای شبیه ویسپر فلو")
+    dim(ch, "مدل شنوا کوچیک، ۱۱۴ میلیون پارامتر — هیچ داده‌ای از سیستم شما خارج نمی‌شود")
 
     c1 = card(t_help, "استفاده سریع")
-    dim(c1, "۱ — در هر برنامه‌ای (نوت‌پد، تلگرام، مرورگر…) کلید میانبر را بزن")
+    dim(c1, "۱ — در هر برنامه‌ای (نوت‌پد، تلگرام، مرورگر…) کلید میان‌بر را بزن")
     dim(c1, "۲ — صحبت کن؛ پنجره زنده کنار موس متن را همزمان نشان می‌دهد")
     dim(c1, "۳ — همان کلید را دوباره بزن تا متن در محل کرسر درج شود")
 
     c2 = card(t_help, "فرمان‌های صوتی")
     dim(c2, "بگو «نقطه» یا «ویرگول» یا «علامت سوال» تا نشانه درج شود")
     dim(c2, "«گیومه باز» و «گیومه بسته» برای « »، «نقطه ویرگول» برای ؛")
-    dim(c2, "«خط جدید» کلید Enter را می‌زند")
+    dim(c2, "برای رفتن به خط بعد، «خط جدید» را بگو (کلید Enter)")
     dim(c2, "«حذف آخرین کلمه» آخرین کلمه درج‌شده را پاک می‌کند")
 
     c3 = card(t_help, "نکته‌ها")
-    dim(c3, "میان‌بر با suppress ثبت می‌شود؛ اگر با میان‌بر برنامه‌ای تداخل داشت از تب عمومی عوضش کن")
-    dim(c3, "در برنامه‌های run-as-administrator درج کار نمی‌کند (محدودیت ویندوز)")
+    dim(c3, "ثبت میان‌بر انحصاری است؛ کلید انتخابی فقط برای این اپ مصرف می‌شود و به برنامه مقصد نمی‌رسد — اگر تداخل داشت، از تب عمومی عوضش کن")
+    dim(c3, "اگر برنامه مقصد با دسترسی مدیر اجرا شده باشد، درج کار نمی‌کند (محدودیت ویندوز) — اپ را هم با دسترسی مدیر اجرا کنید یا روش درج را عوض کنید")
     dim(c3, "اگر دستگاه ورودی را عوض کردی، در تب میکروفون انتخاب یا «خودکار» را نگه دار")
     dim(c3, "اعداد حروفی («بیست و سه») خودکار به رقم (۲۳) تبدیل می‌شوند — از تب درج متن خاموشش کن")
 
