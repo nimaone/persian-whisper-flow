@@ -11,3 +11,4 @@ spikes/test_audio/
 
 # لاگ‌های محلی
 *.log
+.zcode/
