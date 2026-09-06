@@ -22,8 +22,8 @@ MODEL_DIR = REPO_ROOT / "model"
 MODEL_FILE = MODEL_DIR / "model.onnx"
 TOKENS_FILE = MODEL_DIR / "tokens.txt"
 
-# <<< بعد از ساخت Release، نام کاربری/ریپو را اینجا بگذارید >>>
-GITHUB_REPO = ""  # مثلاً "your-username/persian-whisper-flow"
+# مخزن گیت‌هاب این پروژه — asset های مدل از Release همین تگ دانلود می‌شوند
+GITHUB_REPO = "nimaone/persian-whisper-flow"
 GITHUB_RELEASE_TAG = "model-v1.0"
 
 HF_BASE = "https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx/resolve/main"
