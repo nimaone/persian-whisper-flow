@@ -3,12 +3,21 @@ __pycache__/
 *.py[cod]
 .venv/
 
-# مدل — از HuggingFace دانلود می‌شود (438MB)
-model/
+# مدل — با download_model.py دانلود می‌شود (438MB)
+# توجه: README و LICENSE داخل model/ باید در گیت بمانند
+model/*
+!model/README.md
+!model/LICENSE
 
 # صوت آزمایشی
 spikes/test_audio/
+*.wav
 
 # لاگ‌های محلی
 *.log
 .zcode/
+
+# خروجی‌های بیلد (در صورت اضافه‌شدن در آینده)
+build/
+dist/
+*.spec
