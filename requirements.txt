@@ -1,5 +1,5 @@
 sherpa-onnx==1.13.7
-numpy>=2.0
+numpy>=1.26,<2.3
 sounddevice>=0.5
 keyboard>=0.13.5
 pyperclip>=1.9
@@ -7,5 +7,6 @@ pystray>=0.19
 Pillow>=10.0
 customtkinter>=5.2
 # فقط برای حالت اختیاری «واژه‌های حساس» (app/hotword_asr.py)
+# pyctcdecode فعلاً numpy<2.0 می‌خواهد — تا رفع آن numpy را بالاتر نبرید
 pyctcdecode>=0.5
 onnxruntime>=1.19
