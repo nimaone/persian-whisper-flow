@@ -137,6 +137,20 @@ spikes/             CLI test tools
 - **Partial insertion** → slow target app; if clipboard mode fails, try direct typing.
 - **Hotkey conflicts** → pick a new combo in Settings (e.g. Ctrl+Alt+D).
 
+## Building the Windows exe (branch: feature/exe-installer)
+
+```bash
+.venv\Scripts\pip install pyinstaller
+.venv\Scripts\python.exe -m PyInstaller dikteyar.spec --noconfirm
+```
+
+Output: `dist/DikteYar/` — a folder you can zip as a portable build. Notes:
+
+- **onedir, not onefile** — instant startup; onefile extracts ~150 MB to temp on every launch and misbehaves with keyboard hooks and antivirus.
+- **The model is not bundled** (light installer) — on first run a dialog offers an automatic download from GitHub Releases (~440 MB) or manual selection of a folder containing the files.
+- `version_info.txt` provides the Windows version resource (name/version/icon in file Properties).
+- For a full local test, copy `model/` next to `DikteYar.exe` to skip the first-run dialog.
+
 ## License & Credits
 
 - This app's code ("DikteYar"): **MIT** — see [LICENSE](LICENSE)
