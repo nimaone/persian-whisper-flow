@@ -19,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 from PIL import Image, ImageDraw
 
-from app import persian_itn, voice_commands
+from app import paths, persian_itn, voice_commands
+from app import first_run
 from app.asr import LiveTranscriber, load_engine
 from app.config import APP_TITLE, Config, model_dir, set_autostart
 from app.control_window import ControlWindow
@@ -133,8 +134,8 @@ class App:
     # ---------- تری ----------
     def _tray_icon(self):
         # لوگوی برنامه — در نبود asset، همان شکل ساده‌ی قبلی
-        logo = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
-        if logo.exists():
+        logo = paths.asset_path("logo.png")
+        if logo:
             try:
                 return Image.open(logo)
             except Exception:
@@ -499,6 +500,9 @@ class App:
 
 
 def main():
+    # بسته نصب‌شده با مدل کنار exe شروع نمی‌شود — اول تدارک مدل (دانلود/انتخاب دستی)
+    if not first_run.ensure_model():
+        return
     app = App()
     try:
         app.start()

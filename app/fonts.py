@@ -1,11 +1,11 @@
 """فونت وزیرمتن — باندل‌شده در assets/fonts، بارگذاری در Tkinter."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import tkinter.font as tkfont
 
-_FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+from app.paths import bundle_root
+
+_FONT_DIR = bundle_root() / "assets" / "fonts"
 
 _regular: str | None = None
 _family = "Vazirmatn"

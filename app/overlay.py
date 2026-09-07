@@ -13,7 +13,7 @@ from pathlib import Path
 
 import customtkinter as ctk
 
-from app import theme
+from app import paths, theme
 
 PAD = 18
 WAVE_BARS = 32
@@ -42,8 +42,8 @@ class Overlay:
 
         # لوگو به‌عنوان آیکون پیش‌فرض همه‌ی پنجره‌های Toplevel
         self._logo_ref = None
-        logo = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
-        if logo.exists():
+        logo = paths.asset_path("logo.png")
+        if logo:
             try:
                 from PIL import ImageTk
                 self._logo_ref = ImageTk.PhotoImage(file=str(logo))
