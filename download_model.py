@@ -4,6 +4,7 @@ CLI همین منطق را صدا می‌زند که اپ هم در دیالوگ
     python download_model.py
 
 خروجی: model/model.onnx و model/tokens.txt
+(تگ Release که اسکریپت از آن می‌خواند در app/model_download.py است)
 """
 from __future__ import annotations
 

@@ -14,7 +14,7 @@ from pathlib import Path
 
 # مخزن گیت‌هاب پروژه — assetهای مدل از Release همین تگ دانلود می‌شوند
 GITHUB_REPO = "nimaone/persian-whisper-flow"
-GITHUB_RELEASE_TAG = "model-v1.0"
+GITHUB_RELEASE_TAG = "v1.1.0"
 HF_BASE = "https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx/resolve/main"
 
 FILE_NAMES = ("model.onnx", "tokens.txt")
