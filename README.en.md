@@ -151,6 +151,15 @@ Output: `dist/DikteYar/` — a folder you can zip as a portable build. Notes:
 - `version_info.txt` provides the Windows version resource (name/version/icon in file Properties).
 - For a full local test, copy `model/` next to `DikteYar.exe` to skip the first-run dialog.
 
+### Installer (Inno Setup)
+
+```bash
+winget install JRSoftware.InnoSetup
+"C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\dikteyar.iss
+```
+
+Output: `installer/Output/DikteYar-Setup-1.1.0.exe` (~36 MB). Highlights: **per-user** install into `%LOCALAPPDATA%\Programs\DikteYar` (no admin required), optional desktop shortcut, run-at-startup checkbox, and the model is excluded from the payload so the installer stays light even if you copied it next to the exe for testing.
+
 ## License & Credits
 
 - This app's code ("DikteYar"): **MIT** — see [LICENSE](LICENSE)

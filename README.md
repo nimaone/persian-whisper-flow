@@ -157,6 +157,15 @@ python -m venv .venv
 - `version_info.txt` مشخصات ویندوزی (نام/نسخه/آیکون در Properties) را می‌دهد
 - برای تست کامل، `model/` را کنار `DikteYar.exe` کپی کنید تا دیالوگ اولین اجرا رد شود
 
+### نصب‌کننده (Inno Setup)
+
+```bash
+winget install JRSoftware.InnoSetup
+"C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\dikteyar.iss
+```
+
+خروجی: `installer/Output/DikteYar-Setup-1.1.0.exe` (~۳۶MB). مشخصات: نصب **per-user** در `%LOCALAPPDATA%\Programs\DikteYar` بدون نیاز به دسترسی مدیر، شورتکات اختیاری دسکتاپ، تیک اجرای خودکار با ویندوز، و حذف مدل از محتوا (نصب‌کننده سبک می‌ماند حتی اگر برای تست مدل کنار exe باشد).
+
 ## لایسنس و سپاس‌ها
 
 - کد این اپ («دیکته‌یار»): **MIT** — فایل [LICENSE](LICENSE)
