@@ -14,8 +14,8 @@ Farsi (Persian) speech-to-text dictation, fully offline and local — triggered 
 
 - **Model**: Shenava-Koochik v1.0 (FastConformer NeMo CTC, 114M parameters) via sherpa-onnx
 - **Language**: Python 3.12 — CustomTkinter UI (no heavyweight GUI dependencies)
-- **Platform**: Windows 10/11 — **this app is Windows-only** (core modules are cross-platform, but the UI, text insertion and installer are built for Windows)
-- **Version**: 1.1.0 — Windows installer available under [Releases](https://github.com/nimaone/persian-whisper-flow/releases/latest)
+- **Platform**: Windows 10/11 **64-bit (x64)** — **this app is Windows-only** and does not run on Windows ARM (core modules are cross-platform, but the UI, text insertion and installer are built for Windows x64)
+- **Version**: 1.1.0 — Windows installer (`DikteYar-Setup-1.1.0-x64.exe`) available under [Releases](https://github.com/nimaone/persian-whisper-flow/releases/latest)
 
 ## Features
 
@@ -158,7 +158,7 @@ winget install JRSoftware.InnoSetup
 "C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\dikteyar.iss
 ```
 
-Output: `installer/Output/DikteYar-Setup-1.1.0.exe` (~36 MB). Highlights: **per-user** install into `%LOCALAPPDATA%\Programs\DikteYar` (no admin required), optional desktop shortcut, run-at-startup checkbox, and the model is excluded from the payload so the installer stays light even if you copied it next to the exe for testing.
+Output: `installer/Output/DikteYar-Setup-1.1.0-x64.exe` (~36 MB). Highlights: **per-user** install into `%LOCALAPPDATA%\Programs\DikteYar` (no admin required), optional desktop shortcut, run-at-startup checkbox, and the model is excluded from the payload so the installer stays light even if you copied it next to the exe for testing.
 
 ## License & Credits
 

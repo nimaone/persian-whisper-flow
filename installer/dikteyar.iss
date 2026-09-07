@@ -27,7 +27,8 @@ DisableProgramGroupPage=yes
 ; بدون دسترسی مدیر — نصب per-user
 PrivilegesRequired=lowest
 OutputDir=Output
-OutputBaseFilename=DikteYar-Setup-{#MyAppVersion}
+; پسوند x64 در نام فایل — بیلد فقط برای CPUهای ۶۴بیتی اینتل/AMD است
+OutputBaseFilename=DikteYar-Setup-{#MyAppVersion}-x64
 SetupIconFile=..\assets\logo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/max
