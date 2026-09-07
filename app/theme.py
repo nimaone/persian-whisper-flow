@@ -39,9 +39,8 @@ def family() -> str:
 
 def asset_path(name: str):
     """مسیر یک فایل در assets/ — اگر نباشد None."""
-    from pathlib import Path
-    p = Path(__file__).resolve().parent.parent / "assets" / name
-    return p if p.exists() else None
+    from app.paths import asset_path as _resolve
+    return _resolve(name)
 
 
 def apply_icon(win) -> None:

@@ -141,6 +141,30 @@ python -m venv .venv
 
 - بازتولید لوگو: `.venv\Scripts\python spikes\make_logo.py` (خروجی: `assets/logo.png` و `assets/logo.ico`)
 - تست ترنسکرایپ CLI: `spikes/transcribe_cli.py` — ضبط آزمایشی: `spikes/record_cli.py` — تولید صوت آزمایشی: `spikes/gen_test_wav.py` — A/B هات‌وورد: `spikes/hotword_test.py` (کلیپ‌های تست در `spikes/test_app/` — لوکال، داخل گیت نیست)
+- بازتولید اسکرین‌شات‌های README: `.venv\Scripts\python spikes\make_screenshots.py control|overlay|settings`
+
+## ساخت exe ویندوز (شاخه feature/exe-installer)
+
+```bash
+.venv\Scripts\pip install pyinstaller
+.venv\Scripts\python.exe -m PyInstaller dikteyar.spec --noconfirm
+```
+
+خروجی: `dist/DikteYar/` — پوشه‌ی قابل zip (نسخه پرتابل). نکته‌ها:
+
+- **onedir نه onefile** — استارت فوری؛ onefile هر بار ~۱۵۰MB را به temp اکسترکت می‌کند و با هوک کیبورد و آنتی‌ویروس اذیت می‌کند
+- **مدل داخل بسته نیست** (نصب‌کننده سبک) — در اولین اجرا دیالوگ می‌آید: دانلود خودکار از Release (~۴۴۰MB) یا «انتخاب دستی» پوشه‌ای که کاربر خودش فایل‌ها را در آن گذاشته
+- `version_info.txt` مشخصات ویندوزی (نام/نسخه/آیکون در Properties) را می‌دهد
+- برای تست کامل، `model/` را کنار `DikteYar.exe` کپی کنید تا دیالوگ اولین اجرا رد شود
+
+### نصب‌کننده (Inno Setup)
+
+```bash
+winget install JRSoftware.InnoSetup
+"C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\dikteyar.iss
+```
+
+خروجی: `installer/Output/DikteYar-Setup-1.1.0.exe` (~۳۶MB). مشخصات: نصب **per-user** در `%LOCALAPPDATA%\Programs\DikteYar` بدون نیاز به دسترسی مدیر، شورتکات اختیاری دسکتاپ، تیک اجرای خودکار با ویندوز، و حذف مدل از محتوا (نصب‌کننده سبک می‌ماند حتی اگر برای تست مدل کنار exe باشد).
 
 ## لایسنس و سپاس‌ها
 

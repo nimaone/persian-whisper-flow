@@ -14,6 +14,12 @@ spikes/test_audio/
 spikes/test_app/
 *.wav
 
+
+# آموزش مدل
+training
+training/raw/
+*.wav
+
 # لاگ‌های محلی
 *.log
 .zcode/
@@ -22,3 +28,4 @@ spikes/test_app/
 build/
 dist/
 *.spec
+installer/Output/
