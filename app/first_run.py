@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog
@@ -17,7 +18,6 @@ import customtkinter as ctk
 
 from app import model_download, theme
 from app.config import APP_TITLE
-from app.paths import install_root
 
 
 def ensure_model() -> bool:
@@ -30,7 +30,7 @@ def ensure_model() -> bool:
     md = model_dir()
     if model_download.is_complete(md):
         return True
-    if not getattr(__import__("sys"), "frozen", False):
+    if not getattr(sys, "frozen", False):
         # سورس: بدون دیالوگ — همان پیام CLI
         print(f"[model] فایل‌های مدل در {md} نیست — python download_model.py")
         return False

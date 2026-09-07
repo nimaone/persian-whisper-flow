@@ -8,7 +8,6 @@ CLI همین منطق را صدا می‌زند که اپ هم در دیالوگ
 """
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
