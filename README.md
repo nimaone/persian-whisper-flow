@@ -168,7 +168,7 @@ winget install JRSoftware.InnoSetup
 
 ## لایسنس و سپاس‌ها
 
-- کد این اپ («دیکته‌یار»): **MIT** — فایل [LICENSE](LICENSE)
+- کد این اپ («دیکته‌یار»): **Apache-2.0** — فایل [LICENSE](LICENSE) (هم‌خانواده با لایسنس مدل)
 - مدل «شنوا کوچیک v1.0» (Shenava Koochik v1.0) اثر Reza2kn: **Apache-2.0** — فایل [model/LICENSE](model/LICENSE)
   · [نسخه sherpa-onnx مدل](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) · [پروژه Shenava-1](https://github.com/Reza2kn/shenava-1)
 - جزئیات کامل مدل (پارامترها، دیتاست‌های آموزش، متریک‌ها): [model/README.md](model/README.md)

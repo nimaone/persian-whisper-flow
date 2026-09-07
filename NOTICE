@@ -1,9 +1,11 @@
 DikteYar (دیکته‌یار) — repository: persian-whisper-flow
 Copyright 2026 DikteYar contributors
 
-This product includes the "Shenava Koochik v1.0" (شنوا کوچیک) automatic
-speech recognition model, created by Reza2kn as part of the Shenava-1 /
-VisualEars project, and licensed under the Apache License, Version 2.0.
+This product is licensed under the Apache License, Version 2.0
+(see LICENSE). It includes the "Shenava Koochik v1.0" (شنوا کوچیک)
+automatic speech recognition model, created by Reza2kn as part of the
+Shenava-1 / VisualEars project, also licensed under the Apache License,
+Version 2.0.
 
   Model (FP32 NeMo checkpoint):
     https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0

@@ -18,7 +18,7 @@ VSVersionInfo(
         StringStruct("FileDescription", "DikteYar (دیکته‌یار) — Persian offline dictation"),
         StringStruct("FileVersion", "1.1.0"),
         StringStruct("InternalName", "DikteYar"),
-        StringStruct("LegalCopyright", "MIT License — model: Apache-2.0 (Shenava Koochik by Reza2kn)"),
+        StringStruct("LegalCopyright", "Apache License 2.0 — model: Apache-2.0 (Shenava Koochik by Reza2kn)"),
         StringStruct("OriginalFilename", "DikteYar.exe"),
         StringStruct("ProductName", "DikteYar"),
         StringStruct("ProductVersion", "1.1.0"),

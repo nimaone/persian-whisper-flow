@@ -162,7 +162,7 @@ Output: `installer/Output/DikteYar-Setup-1.1.0.exe` (~36 MB). Highlights: **per-
 
 ## License & Credits
 
-- This app's code ("DikteYar"): **MIT** — see [LICENSE](LICENSE)
+- This app's code ("DikteYar"): **Apache-2.0** — see [LICENSE](LICENSE) (same family as the model's license)
 - The "Shenava Koochik v1.0" model by Reza2kn: **Apache-2.0** — see [model/LICENSE](model/LICENSE)
   · [sherpa-onnx model repo](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) · [Shenava-1 project](https://github.com/Reza2kn/shenava-1)
 - Full model details (architecture, training data, metrics): [model/README.md](model/README.md)
