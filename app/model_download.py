@@ -7,7 +7,7 @@
 """
 from __future__ import annotations
 
-import tempfile
+
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -38,14 +38,19 @@ def fmt_size(n: float) -> str:
 
 
 def _download(url: str, dest: Path, progress_cb=None) -> bool:
-    """دانلود با نوشتن در temp و جای‌گذاری نهایی؛ progress_cb(done, total)."""
+    """دانلود با نوشتن در فایل موقت کنار مقصد و جای‌گذاری اتمیک.
+
+    نکته: فایل موقت باید در همان درایو مقصد باشد — os.replace بین دو
+    درایو OSError می‌دهد (باگ واقعی اولین تست: Temp در C:، مقصد در J:).
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".part")
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "dikteyar-downloader/1.0"})
         with urllib.request.urlopen(req, timeout=60) as resp:
             total = int(resp.headers.get("Content-Length") or 0)
             if total and total < EXPECTED_MIN.get(dest.name, 1):
                 return False
-            tmp = Path(tempfile.gettempdir()) / f"dikteyar_{dest.name}.part"
             done = 0
             with open(tmp, "wb") as f:
                 while chunk := resp.read(1 << 20):
@@ -53,10 +58,10 @@ def _download(url: str, dest: Path, progress_cb=None) -> bool:
                     done += len(chunk)
                     if progress_cb:
                         progress_cb(done, total or done)
-            dest.parent.mkdir(parents=True, exist_ok=True)
             tmp.replace(dest)
             return True
     except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
+        tmp.unlink(missing_ok=True)
         return False
 
 
