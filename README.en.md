@@ -14,8 +14,8 @@ Farsi (Persian) speech-to-text dictation, fully offline and local — triggered 
 
 - **Model**: Shenava-Koochik v1.0 (FastConformer NeMo CTC, 114M parameters) via sherpa-onnx
 - **Language**: Python 3.12 — CustomTkinter UI (no heavyweight GUI dependencies)
-- **Platform**: Windows 10/11 (core modules are cross-platform)
-- **Version**: 1.0.0
+- **Platform**: Windows 10/11 — **this app is Windows-only** (core modules are cross-platform, but the UI, text insertion and installer are built for Windows)
+- **Version**: 1.1.0 — Windows installer available under [Releases](https://github.com/nimaone/persian-whisper-flow/releases/latest)
 
 ## Features
 
