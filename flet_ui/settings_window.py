@@ -22,8 +22,8 @@ class SettingsWindow:
         page.title = APP_TITLE_FULL + " — تنظیمات"
         page.bgcolor = t.BG
         page.theme_mode = ft.ThemeMode.DARK
-        page.window.width = 620
-        page.window.height = 560
+        page.window.width = 560   # هم‌اندازه‌ی win.geometry("560x640") نسخه CTk
+        page.window.height = 640
         page.window.resizable = True
         page.padding = 0
         page.rtl = True
