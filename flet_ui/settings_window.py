@@ -18,6 +18,7 @@ class SettingsWindow:
     def __init__(self, page: ft.Page):
         self.page = page
         t.install_fonts(page)
+        t.apply_icon(page)
         page.title = APP_TITLE_FULL + " — تنظیمات"
         page.bgcolor = t.BG
         page.theme_mode = ft.ThemeMode.DARK

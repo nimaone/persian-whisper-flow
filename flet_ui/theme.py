@@ -58,6 +58,16 @@ def fam(weight: str = "Regular", size: int = 13) -> ft.TextStyle:
     )
 
 
+def apply_icon(page: ft.Page) -> None:
+    """آیکون نوار عنوان/تسک‌بار از assets/logo.ico — قرینه‌ی theme.apply_icon.
+
+    Window.icon در ویندوز مسیر .ico می‌گیرد؛ بی‌صدا رد می‌شود اگر نبود.
+    """
+    ico = _FONT_DIR.parent / "logo.ico"
+    if ico.exists():
+        page.window.icon = str(ico)
+
+
 # ---------- هلپرهای مشترک ----------
 
 def card(title: str | None, *controls, padding: int = 12) -> ft.Container:
