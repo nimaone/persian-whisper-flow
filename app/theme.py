@@ -25,6 +25,11 @@ ON_DANGER = "#ffffff"
 
 WARN = "#d9a13c"
 
+# رندر نرم سراسری شکل‌های CTk — با import این ماژول در همه‌ی پنجره‌ها فعال است
+from app import smooth_ctk as _smooth_ctk  # noqa: E402,F401
+
+_smooth_ctk.apply()
+
 _fam: str | None = None
 
 

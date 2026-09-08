@@ -8,7 +8,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
-from app import theme
+from app import theme, smooth_ctk
 from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION
 from app.win32 import style_toplevel, smooth_show
 from app.theme import apply_icon
@@ -71,6 +71,7 @@ class ControlWindow:
                      text_color=theme.FG_DIM, anchor="w").pack(side="left", pady=(4, 0))
 
         self._state = "loading"
+        smooth_ctk.flush_pending(self.win)  # دکمه‌ها از اولین فریم کامل
         smooth_show(self.win)  # نمایش نرم — بدون فریم سفید
 
         # مینیمایز → سینی: چون Toplevel دکمه‌ی تسک‌بار ندارد، پنجره‌ی مینیمایز

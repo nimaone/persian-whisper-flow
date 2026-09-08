@@ -86,6 +86,14 @@ def smooth_show(win, duration_ms: int = 140) -> None:
         try:
             win.update_idletasks()
             win.update()  # اولین ترسیم کامل در حالت نامرئی
+            # رنگ‌ها بعد از این update اعمال شده‌اند — بوم‌های هنوز خالی
+            # (که در بورست ساخت به finalize سپرده شده بودند) همین‌جا پر
+            # می‌شوند تا fade-in با پنجره‌ی کامل شروع شود، نه بوم‌های خاکستری
+            try:
+                from app import smooth_ctk
+                smooth_ctk.flush_pending(win)
+            except Exception:
+                pass
             win.update()
         except tk.TclError:
             return

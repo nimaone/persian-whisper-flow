@@ -13,14 +13,14 @@ import tkinter as tk
 import customtkinter as ctk
 import numpy as np
 
-from app import theme
+from app import theme, smooth_ctk
 from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config, set_autostart
 from app.recorder import detect_best_device
 from app.win32 import style_toplevel, smooth_show, disable_min_max
 from app.theme import apply_icon
 
 SPECS_BARS = 48
-SPECS_H = 40
+SPECS_H = 20
 
 AUTO_STOP_LABELS = {"خاموش": 0, "۳ ثانیه": 3, "۵ ثانیه": 5, "۱۰ ثانیه": 10}
 
@@ -70,6 +70,7 @@ class MicTester:
 
 
 def open_settings(parent_root, app=None):
+    smooth_ctk.apply()  # رندر نرم سراسری — اگر هنوز فعال نشده
     cfg = Config.load()
     fam = theme.family()
 
@@ -97,7 +98,7 @@ def open_settings(parent_root, app=None):
     def card(parent, title):
         """کارت با عنوان — inner frame را برمی‌گرداند."""
         c = ctk.CTkFrame(parent, fg_color=theme.SURFACE, corner_radius=10)
-        c.pack(fill="x", pady=(10, 0), padx=2)
+        c.pack(fill="x", pady=(7, 0), padx=2)
         inner = ctk.CTkFrame(c, fg_color="transparent")
         inner.pack(fill="x", padx=14, pady=12)
         if title:
@@ -121,6 +122,11 @@ def open_settings(parent_root, app=None):
         text_color=theme.FG,
         segmented_button_font=(fam, 13),
     )
+    # نوار دکمه‌های ثابت — باید «قبل از» tabview بسته شود تا نوار پایین
+    # اول صاحب جای خودش شود؛ در غیر این صورت ارتفاع درخواستی tabview که با
+    # هر تب عوض می‌شود جای دکمه‌ها را جابه‌جا می‌کند (تب میکروفون بلندتر است).
+    btn_bar = tk.Frame(win, bg=theme.BG, padx=18, pady=8)
+    btn_bar.pack(fill="x", side="bottom")
     tabview.pack(fill="both", expand=True, padx=18, pady=(14, 10))
     tab = tabview.add
     for name in ("راهنما", "پیشرفته", "درج متن", "میکروفون", "عمومی"):
@@ -135,7 +141,8 @@ def open_settings(parent_root, app=None):
     switch_style = dict(font=(fam, 13), text_color=theme.FG,
                         fg_color=theme.SURFACE_3,   # ریل خاموش
                         progress_color=theme.ACCENT,  # ریل روشن = سبز
-                        button_color=theme.FG, button_hover_color="#ffffff")
+                        button_color=theme.FG, button_hover_color="#ffffff",
+                        border_width=0)  # دایره هم‌اندازه‌ی ریل
     radio_style = dict(font=(fam, 13), text_color=theme.FG,
                        fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER,
                        border_color=theme.SURFACE_3)
@@ -251,7 +258,7 @@ def open_settings(parent_root, app=None):
         if match:
             current_name = match[0]
     dev_values = [auto_label] + [name for _, name in devices]
-    dev_combo = ctk.CTkOptionMenu(cm, values=dev_values, height=40,
+    dev_combo = ctk.CTkOptionMenu(cm, values=dev_values, height=36,
                                   dynamic_resizing=False, anchor="e", **menu_style)
     dev_combo.set(current_name)
     dev_combo.pack(fill="x")
@@ -275,7 +282,7 @@ def open_settings(parent_root, app=None):
 
     spec_canvas = tk.Canvas(ct, height=SPECS_H + 8,
                             bg=theme.DEEP, highlightthickness=0)
-    spec_canvas.pack(fill="x", pady=(0, 6))
+    spec_canvas.pack(fill="x", pady=(0, 2))
 
     test_btn_var = tk.StringVar(value="شروع تست")
 
@@ -301,7 +308,7 @@ def open_settings(parent_root, app=None):
     ctk.CTkButton(ct, textvariable=test_btn_var, font=(fam, 13, "bold"),
                   height=34, width=120, corner_radius=8,
                   fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3,
-                  text_color=theme.FG, command=toggle_test).pack(pady=(0, 4))
+                  text_color=theme.FG, command=toggle_test).pack(pady=(0, 2))
 
     verdict_lbl = ctk.CTkLabel(ct, text="", font=(fam, 13, "bold"),
                                text_color=theme.FG, anchor="e")
@@ -321,7 +328,7 @@ def open_settings(parent_root, app=None):
 
     var_sound = tk.BooleanVar(value=bool(cfg.get("sound_feedback")))
     ctk.CTkSwitch(cr, text="بوق کوتاه هنگام شروع و پایان ضبط",
-                  variable=var_sound, **switch_style).pack(anchor="e", pady=(10, 0))
+                  variable=var_sound, **switch_style).pack(anchor="e", pady=(6, 0))
 
     def poll_spec():
         if not var_testing["on"]:
@@ -469,10 +476,7 @@ def open_settings(parent_root, app=None):
     dim(c3, "اگر میکروفون را عوض کردی، از تب میکروفون دستگاه را انتخاب کن یا حالت خودکار را نگه دار")
     dim(c3, "اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ خاموش یا روشن‌کردنش از تب درج متن است")
 
-    # ================= دکمه‌های ثابت پایین =================
-    btn_bar = tk.Frame(win, bg=theme.BG, padx=18, pady=8)
-    btn_bar.pack(fill="x", side="bottom")
-
+    # ================= دکمه‌های ثابت پایین (pack در بالای فایل انجام شد) =================
     def _sync(data: dict):
         """بارگذاری مقادیر روی ویجت‌ها — برای بازنشانی."""
         nonlocal prev_hotkey
@@ -558,4 +562,5 @@ def open_settings(parent_root, app=None):
                   command=close).pack(side="right")
 
     win.protocol("WM_DELETE_WINDOW", close)
+    smooth_ctk.flush_pending(win)  # پرکردن بوم‌های خالی — دکمه‌ها از اولین فریم کامل
     smooth_show(win)  # نمایش نرم بعد از ساخت کامل محتوا — بدون فریم سفید
