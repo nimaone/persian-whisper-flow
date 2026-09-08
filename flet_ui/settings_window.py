@@ -63,13 +63,18 @@ class SettingsWindow:
         )
 
         # ---------- نوار دکمه‌های ثابت پایین (RTL: اولین = راست‌ترین؛
-        # مثل CTk: ذخیره راست، بازنشانی چپ) ----------
+        # مثل CTk: ذخیره راست، بعد انصراف، بازنشانی چپ) ----------
         btn_bar = ft.Row(
             [
                 ft.ElevatedButton(
                     content="ذخیره", on_click=self._save, width=130, height=40,
                     bgcolor=t.ACCENT, color=t.ON_ACCENT,
                     style=t.btn_style(weight="bold"),
+                ),
+                ft.ElevatedButton(
+                    content="انصراف", on_click=self._close, width=110, height=40,
+                    bgcolor=t.SURFACE_2, color=t.FG,
+                    style=t.btn_style(),
                 ),
                 ft.Container(expand=True),
                 ft.ElevatedButton(
