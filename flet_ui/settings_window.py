@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import flet as ft
 
-from app.config import APP_TITLE_FULL, APP_VERSION, DEFAULTS
+from app.config import APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config
 from flet_ui import theme as t
 
 
@@ -382,6 +382,16 @@ class SettingsWindow:
                          if len(ln.strip()) >= 2],
         }
 
+    def _selected_device(self):
+        """دستگاه انتخابی در کمبو — None یعنی تشخیص خودکار (قرینه‌ی CTk)."""
+        v = self.var_device.value
+        if v == self.auto_label or not v:
+            return None
+        try:
+            return int(v.split("]")[0][1:])
+        except Exception:
+            return None
+
     def _apply(self, data: dict):
         """بارگذاری مقادیر روی ویجت‌ها — قرینه‌ی _sync()."""
         self.var_hotkey.value = data.get("hotkey")
@@ -410,7 +420,14 @@ class SettingsWindow:
         self.page.update()
 
     async def _save(self, e=None):
-        self.result = self._collect()
+        data = self._collect()
+        data["input_device"] = self._selected_device()
+        # ذخیره‌ی واقعی روی دیسک — مثل save() نسخه CTk
+        loaded = Config.load()
+        for k, v in data.items():
+            loaded.set(k, v)
+        loaded.save()
+        self.result = dict(data)
         if self.on_save:
             self.on_save(self.result)
         await self._close()
