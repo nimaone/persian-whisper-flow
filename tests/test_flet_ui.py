@@ -1,0 +1,360 @@
+"""تست‌های خودکار flet_ui — لایه‌ی منطق (بدون GUI).
+
+اجرا:
+    .venv/Scripts/python.exe -m pytest tests/test_flet_ui.py -v
+یا بدون pytest:
+    .venv/Scripts/python.exe -m tests.test_flet_ui
+
+ساختار: هر پنجره با یک Page شبیه‌سازی‌شده (MockPage) ساخته می‌شود؛
+تمام فراخوانی‌های page.update/destroy ضبط می‌شوند. مقادیر config هم
+به DEFAULTS قفل می‌شود تا تست قطعی (deterministic) باشد.
+
+تست GUI جعبه‌سیاه (کلیک واقعی) جداگانه و دستی انجام می‌شود — این
+فایل پوشش منطقِ حالت‌ها/داده/دکمه‌هاست.
+"""
+from __future__ import annotations
+
+import asyncio
+import os
+import sys
+import unittest
+from types import SimpleNamespace
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import flet as ft
+
+from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS
+
+
+# ---------- ابزار شبیه‌سازی ----------
+
+class MockWindow:
+    def __init__(self):
+        self.width = self.height = None
+        self.resizable = None
+        self.icon = None
+        self.destroyed = False
+
+    async def destroy(self):
+        # قرینه‌ی Window.destroy در Flet 0.86 که کوروتین است
+        self.destroyed = True
+
+
+class MockPage:
+    """حداقلِ چیزی که پنجره‌های flet_ui از Page می‌خواهند."""
+
+    def __init__(self):
+        self.window = MockWindow()
+        self.fonts = {}
+        self.updates = 0
+        self.added = []
+        self.title = None
+        self.bgcolor = None
+        self.theme_mode = None
+        self.padding = None
+        self.rtl = None
+
+    def update(self):
+        self.updates += 1
+
+    def add(self, *controls):
+        self.added.extend(controls)
+
+
+def _walk(control):
+    """پیمایش درخت کنترل‌ها — فرزندانِ list/tuple/content/controls."""
+    yield control
+    for attr in ("content", "controls", "tabs", "options"):
+        child = getattr(control, attr, None)
+        if child is None:
+            continue
+        if isinstance(child, (list, tuple)):
+            for c in child:
+                yield from _walk(c)
+        else:
+            yield from _walk(child)
+
+
+def _find_all(root, cls):
+    return [c for c in _walk(root) if isinstance(c, cls)]
+
+
+def _btn_texts(root):
+    return [b.content for b in _find_all(root, ft.ElevatedButton)
+            if isinstance(b.content, str)]
+
+
+# ---------- پنجره کنترل ----------
+
+class TestControlWindow(unittest.TestCase):
+    def setUp(self):
+        from flet_ui.control_window import ControlWindow
+        self.page = MockPage()
+        self.win = ControlWindow(self.page)
+        self.btn = self.win.rec_btn
+
+    def test_window_setup(self):
+        self.assertEqual(self.page.title, APP_TITLE)
+        self.assertEqual(self.page.bgcolor, "#1e1e1e")
+        self.assertTrue(self.page.rtl)
+        self.assertEqual((self.page.window.width, self.page.window.height), (360, 250))
+        self.assertIsNotNone(self.page.window.icon, "آیکون لوگو باید ست شود")
+        self.assertTrue(self.page.window.icon.endswith(".ico"))
+
+    def test_initial_state_is_loading(self):
+        self.assertTrue(self.btn.disabled)
+        self.assertEqual(self.btn.content, "شروع ضبط")
+        self.assertEqual(self.btn.bgcolor, "#333333")          # SURFACE_2
+        self.assertEqual(self.win.state_text.value, "در حال بارگذاری")
+        self.assertIn("بارگذاری", self.win.status_text.value)
+
+    def test_idle_state_enables_green(self):
+        self.win.set_state("idle", "ctrl+shift+space")
+        self.assertFalse(self.btn.disabled)
+        self.assertEqual(self.btn.bgcolor, "#22c55e")          # ACCENT
+        self.assertEqual(self.btn.color, "#081409")            # ON_ACCENT
+        self.assertEqual(self.win.state_text.value, "آماده")
+        self.assertEqual(self.win.state_text.color, "#22c55e")
+        self.assertEqual(self.win.status_text.value, "کلید میانبر: ctrl+shift+space")
+        self.assertIn("صحبت کن", self.win.hint_text.value)
+
+    def test_recording_state_red(self):
+        self.win.set_state("recording", "ctrl+shift+space")
+        self.assertFalse(self.btn.disabled)
+        self.assertEqual(self.btn.bgcolor, "#e5484d")          # DANGER
+        self.assertEqual(self.btn.color, "#ffffff")            # ON_DANGER
+        self.assertEqual(self.btn.content, "توقف و درج متن")
+        self.assertEqual(self.win.state_text.color, "#e5484d")
+        self.assertEqual(self.win.status_text.value, "در حال شنیدن…")
+
+    def test_transcribing_state_disabled(self):
+        self.win.set_state("transcribing", "ctrl+shift+space")
+        self.assertTrue(self.btn.disabled)
+        self.assertEqual(self.btn.content, "در حال تشخیص")
+        self.assertEqual(self.win.status_text.value, "متن را می‌نویسد…")
+
+    def test_state_cycle_returns_to_idle_cleanly(self):
+        for st in ("idle", "recording", "transcribing", "idle"):
+            self.win.set_state(st, "f9")
+        self.assertFalse(self.btn.disabled)
+        self.assertEqual(self.btn.bgcolor, "#22c55e")
+        self.assertEqual(self.win.state_text.value, "آماده")
+
+    def test_set_error(self):
+        self.win.set_error("دستگاه پیدا نشد")
+        self.assertTrue(self.win.status_text.value.startswith("خطا:"))
+        self.assertEqual(self.win.status_text.color, "#e5484d")
+
+    def test_callbacks_fire(self):
+        fired = {"toggle": 0, "settings": 0}
+        self.win.on_toggle = lambda: fired.__setitem__("toggle", fired["toggle"] + 1)
+        self.win.on_settings = lambda: fired.__setitem__("settings", fired["settings"] + 1)
+        self.win._fire_toggle()
+        self.win._fire_settings()
+        self.assertEqual(fired, {"toggle": 1, "settings": 1})
+
+    def test_callbacks_absent_no_crash(self):
+        self.win.on_toggle = None
+        self.win.on_settings = None
+        self.win._fire_toggle()      # نباید exception بدهد
+        self.win._fire_settings()
+
+    def test_button_bar_layout(self):
+        texts = [t for c in self.page.added for t in _btn_texts(c)]
+        self.assertEqual(texts, ["شروع ضبط", "تنظیمات"])
+
+    def test_version_label(self):
+        texts = [c.value for c in _walk_all(self.page.added)
+                 if isinstance(c, ft.Text) and c.value and c.value.startswith("v")]
+        self.assertIn(f"v{APP_VERSION}", texts)
+
+
+def _walk_all(controls):
+    for c in controls:
+        yield from _walk(c)
+
+
+# ---------- پنجره تنظیمات ----------
+
+class SettingsTestBase(unittest.TestCase):
+    """پایه: SettingsWindow با config قطعی (DEFAULTS)."""
+
+    def setUp(self):
+        from flet_ui.settings_window import SettingsWindow
+        page = MockPage()
+        self.page = page
+
+        class Fixed(SettingsWindow):
+            def _load(self):
+                return dict(DEFAULTS)
+
+        self.win = Fixed(page)
+        # اولین add — ستون اصلی شامل tabs و نوار دکمه‌ها
+        self.root = self.page.added[0]
+
+
+class TestSettingsWindow(SettingsTestBase):
+    def test_window_setup(self):
+        self.assertEqual(self.page.title, APP_TITLE_FULL + " — تنظیمات")
+        self.assertEqual((self.page.window.width, self.page.window.height), (560, 640))
+        self.assertTrue(self.page.rtl)
+        self.assertIsNotNone(self.page.window.icon)
+
+    def test_five_tabs(self):
+        self.assertEqual(self.win.tabs.length, 5)
+        labels = [tb.label for tb in self.win.tab_bar.tabs]
+        self.assertEqual(labels, ["عمومی", "میکروفون", "درج متن", "پیشرفته", "راهنما"])
+
+    def test_button_bar_has_three_buttons(self):
+        # فقط ردیفِ نوار دکمه‌ها — نه دکمه‌های داخل تب‌ها (مثل «شروع تست»)
+        bar_rows = [r for r in _find_all(self.root, ft.Row)
+                    if _btn_texts(r) and len(_btn_texts(r)) >= 3]
+        texts = _btn_texts(bar_rows[-1]) if bar_rows else []
+        self.assertEqual(texts, ["ذخیره", "انصراف", "بازنشانی"])
+
+    def test_collect_defaults(self):
+        got = self.win._collect()
+        for key in ("hotkey", "paste_method", "overlay_font_size", "auto_stop_sec",
+                    "num_threads"):
+            self.assertEqual(got[key], DEFAULTS[key], key)
+        # انواع
+        self.assertIsInstance(got["overlay_font_size"], int)
+        self.assertIsInstance(got["num_threads"], int)
+        self.assertIsInstance(got["hotwords"], list)
+
+    def test_apply_roundtrip(self):
+        custom = dict(DEFAULTS)
+        custom.update(hotkey="f9", paste_method="type", overlay_enabled=False,
+                      voice_commands=True, persian_itn=False, restore_clipboard=False,
+                      sound_feedback=True, autostart=False, num_threads=6,
+                      overlay_font_size=19, auto_stop_sec=5, hotword_boost=True,
+                      hotwords=["نیما", "دیکته‌یار"])
+        self.win._apply(custom)
+        got = self.win._collect()
+        # فقط کلیدهای قابل‌ویرایش در UI — input_device کمبو دارد ولی در
+        # _collect عمومی نیست (دمو)
+        editable = [k for k in custom if k != "input_device"]
+        for key in editable:
+            self.assertEqual(got[key], custom[key], key)
+
+    def test_reset_restores_defaults(self):
+        # مقادیر را به‌هم بریز
+        self.win.var_overlay.value = False
+        self.win.var_sound.value = True
+        self.win.var_font.value = 20
+        self.win.var_threads.value = "8"
+        self.win.txt_hotwords.value = "واژه ساختگی تست"
+        self.win._reset(None)
+        got = self.win._collect()
+        self.assertEqual(got["overlay_enabled"], DEFAULTS["overlay_enabled"])
+        self.assertEqual(got["sound_feedback"], DEFAULTS["sound_feedback"])
+        self.assertEqual(got["overlay_font_size"], DEFAULTS["overlay_font_size"])
+        self.assertEqual(got["num_threads"], DEFAULTS["num_threads"])
+        self.assertEqual(got["hotwords"], DEFAULTS["hotwords"])
+        self.assertGreater(self.page.updates, 0, "بعد از reset باید update بشود")
+
+    def test_font_slider_updates_label_and_sample(self):
+        e = SimpleNamespace(control=SimpleNamespace(value=18))
+        self.win._font_slide(e)
+        self.assertEqual(self.win.font_lbl.value, "اندازه متن: 18")
+        self.assertEqual(self.win.sample.style.size, 18)
+
+    def test_save_records_result_and_closes(self):
+        seen = []
+        self.win.on_save = lambda data: seen.append(data)
+        self.win.var_sound.value = True
+        asyncio.run(self.win._save(None))
+        self.assertEqual(len(seen), 1, "on_save باید یک‌بار صدا زده شود")
+        self.assertTrue(seen[0]["sound_feedback"])
+        self.assertEqual(self.win.result, seen[0])
+        self.assertTrue(self.page.window.destroyed, "ذخیره باید پنجره را ببندد")
+
+    def test_cancel_closes_without_saving(self):
+        seen = []
+        self.win.on_save = lambda data: seen.append(data)
+        self.win.var_sound.value = True          # تغییر بی‌اهمیت — نباید ذخیره شود
+        asyncio.run(self.win._close(None))
+        self.assertEqual(seen, [], "انصراف نباید on_save صدا بزند")
+        self.assertIsNone(self.win.result, "انصراف نباید result بنویسد")
+        self.assertTrue(self.page.window.destroyed)
+
+    def test_general_tab_controls_exist(self):
+        self.assertIsInstance(self.win.var_hotkey, ft.TextField)
+        self.assertEqual(self.win.var_hotkey.value, DEFAULTS["hotkey"])
+        self.assertIsInstance(self.win.var_overlay, ft.Switch)
+        self.assertIsInstance(self.win.var_font, ft.Slider)
+        self.assertIsInstance(self.win.var_autostart, ft.Switch)
+
+    def test_insert_tab_radio_group(self):
+        self.assertIsInstance(self.win.var_paste, ft.RadioGroup)
+        self.assertEqual(self.win.var_paste.value, DEFAULTS["paste_method"])
+        for name in ("var_restore", "var_commands", "var_itn"):
+            self.assertIsInstance(getattr(self.win, name), ft.Switch, name)
+
+    def test_advanced_tab_controls_exist(self):
+        self.assertIn(self.win.var_threads.value, [str(i) for i in range(1, 9)])
+        self.assertIsInstance(self.win.var_hotword, ft.Switch)
+        self.assertIsInstance(self.win.txt_hotwords, ft.TextField)
+
+    def test_mic_tab_verdict_initially_empty(self):
+        self.assertEqual(self.win.verdict.value, "")
+        self.assertEqual(self.win.test_btn.content, "شروع تست")
+
+    def test_test_button_toggles_label(self):
+        self.win._toggle_test(None)     # شروع
+        self.assertEqual(self.win.test_btn.content, "توقف تست")
+        self.win._toggle_test(None)     # توقف
+        self.assertEqual(self.win.test_btn.content, "شروع تست")
+
+    def test_reset_restores_device_dropdown(self):
+        # باگ رگرسیون: بازنشانی دستگاه ورودی را به خودکار برنمی‌گرداند
+        self.win.var_device.value = "[18] Microphone Array (Realtek)"
+        self.win._reset(None)
+        self.assertEqual(self.win.var_device.value, self.win.auto_label)
+
+    def test_radio_group_change_handler(self):
+        # باگ رگرسیون: RadioGroup کنترل‌شده است — بدون on_change کلیک کاربر
+        # به مقدار قبلی برمی‌گردد
+        self.assertEqual(self.win.var_paste.on_change, self.win._paste_changed)
+        e = SimpleNamespace(control=SimpleNamespace(value="clipboard"), data="type")
+        self.win._paste_changed(e)
+        self.assertEqual(self.win.var_paste.value, "type")
+
+
+# ---------- هلپرهای تم ----------
+
+class TestThemeHelpers(unittest.TestCase):
+    def test_palette_matches_ctk_theme(self):
+        from flet_ui import theme as t
+        from app import theme as ctk_theme
+        for name in ("BG", "SURFACE", "SURFACE_2", "SURFACE_3", "BORDER", "DEEP",
+                     "FG", "FG_DIM", "ACCENT", "ACCENT_HOVER", "ON_ACCENT",
+                     "DANGER", "DANGER_HOVER", "ON_DANGER", "WARN"):
+            self.assertEqual(getattr(t, name), getattr(ctk_theme, name), name)
+
+    def test_card_structure(self):
+        from flet_ui import theme as t
+        c = t.card("عنوان", ft.Text("متن"))
+        self.assertEqual(c.bgcolor, "#2a2a2a")
+        self.assertEqual(c.border_radius, 10)
+        texts = [x.value for x in _walk(c) if isinstance(x, ft.Text)]
+        self.assertIn("عنوان", texts)
+
+    def test_btn_style_no_hover_color_kwarg(self):
+        from flet_ui import theme as t
+        s = t.btn_style()
+        self.assertEqual(s.shape.radius, 8)
+        self.assertEqual(s.elevation, 0)
+
+    def test_dropdown_uses_on_select(self):
+        from flet_ui import theme as t
+        d = t.dropdown(["الف", "ب"], "ب")
+        self.assertEqual(d.value, "ب")
+        # باگ رگرسیون: Option(متن) فقط key را ست می‌کرد و label خالی می‌ماند
+        self.assertEqual([(o.key, o.text) for o in d.options],
+                         [("الف", "الف"), ("ب", "ب")])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

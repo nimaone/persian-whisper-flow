@@ -247,8 +247,11 @@ class SettingsWindow:
     # ================================================= درج متن
     def _tab_insert(self):
         cfg = self.cfg
+        # RadioGroup کنترل‌شده است: بدون on_change، کلیک کاربر به مقدار
+        # قبلی برمی‌گردد — پس مقدار جدید را همین‌جا ثبت می‌کنیم.
         self.var_paste = ft.RadioGroup(
             value=cfg.get("paste_method"),
+            on_change=self._paste_changed,
             content=ft.Column([
                 ft.Radio(value="clipboard", label="کلیپ‌بورد (پیشنهادی)",
                          active_color=t.ACCENT, fill_color=t.ACCENT,
@@ -282,6 +285,11 @@ class SettingsWindow:
             t.dim("اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ اعداد تکی مثل «یک» حروفی می‌مانند"),
         )
         return ft.Column([c_method, c_clip], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
+
+    def _paste_changed(self, e):
+        """RadioGroup کنترل‌شده است — مقدار جدید در e.data است
+        (e.control.value در لحظه‌ی رویداد هنوز مقدار قدیمی است)."""
+        self.var_paste.value = e.data
 
     # ================================================= پیشرفته
     def _tab_advanced(self):
@@ -392,19 +400,25 @@ class SettingsWindow:
             .get(int(data.get("auto_stop_sec") or 0), "خاموش")
         self.var_hotword.value = bool(data.get("hotword_boost"))
         self.txt_hotwords.value = "\n".join(str(w) for w in (data.get("hotwords") or []))
+        # دستگاه ورودی — None یعنی خودکار؛ مثل _sync در CTk که dev_combo را
+        # روی auto_label می‌گذاشت
+        if data.get("input_device") is None:
+            self.var_device.value = self.auto_label
 
     def _reset(self, e=None):
         self._apply(dict(DEFAULTS))
         self.page.update()
 
-    def _save(self, e=None):
+    async def _save(self, e=None):
         self.result = self._collect()
         if self.on_save:
             self.on_save(self.result)
-        self._close()
+        await self._close()
 
-    def _close(self, e=None):
-        self.page.window.destroy()
+    async def _close(self, e=None):
+        # Window.destroy در Flet 0.86 کوروتین است — اگر هندلر sync باشد
+        # کوروتین هیچ‌وقت await نمی‌شود و پنجره باز می‌ماند.
+        await self.page.window.destroy()
 
     def show(self):
         """نمایش به‌عنوان دیالوگ — تا بسته شود صبر می‌کند."""

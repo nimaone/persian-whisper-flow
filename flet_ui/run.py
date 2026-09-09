@@ -34,8 +34,16 @@ async def main(target: str):
         else:
             from flet_ui.control_window import ControlWindow
             win = ControlWindow(page)
-            # چرخه‌ی وضعیت‌ها برای نمایش
-            await asyncio.sleep(1.2)
+            # چرخه‌ی حالت‌ها با کلیک روی دکمه‌ی اصلی — برای تست GUI
+            states = [("idle", "ctrl+shift+space"), ("recording", "ctrl+shift+space"),
+                      ("transcribing", "ctrl+shift+space")]
+
+            def on_toggle():
+                cur = next((i for i, s in enumerate(states) if s[0] == win._state), -1)
+                nxt = states[(cur + 1) % len(states)]
+                win.set_state(*nxt)
+
+            win.on_toggle = on_toggle
             win.set_state("idle", "ctrl+shift+space")
 
         async def wait_close():

@@ -162,9 +162,13 @@ def radio(label: str, group_value: str, value: str, on_change=None) -> ft.Radio:
 
 def dropdown(values: list[str], value: str, on_change=None, width: int | None = None,
              height: int = 34) -> ft.Dropdown:
-    """دراپ‌داون — قرینه‌ی CTkOptionMenu با menu_style."""
+    """دراپ‌داون — قرینه‌ی CTkOptionMenu با menu_style.
+
+    نکته: ft.dropdown.Option(«متن») مقدار را فقط در key می‌گذارد و
+    label خالی می‌ماند — پس key و text را صریح می‌دهیم.
+    """
     return ft.Dropdown(
-        options=[ft.dropdown.Option(v) for v in values],
+        options=[ft.dropdown.Option(key=v, text=v) for v in values],
         value=value,
         on_select=on_change,
         width=width,
