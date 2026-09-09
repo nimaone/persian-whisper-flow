@@ -134,9 +134,9 @@ class BackendCycle(unittest.TestCase):
         self.assertTrue(wait_for(lambda: app.state == STATE_RECORDING),
                         "باید شروع به ضبط کند")
         self.assertTrue(rec.started)
-        # متن زنده باید در status دیده شود
-        self.assertTrue(wait_for(lambda: any("سلام" in s for s in win.statuses)),
-                        "ترنسکرایب زنده باید در status بیاید")
+        # متن زنده باید به overlay برود (win.statuses فقط برای notify است)
+        self.assertTrue(wait_for(lambda: rec.speech_detected),
+                        "حلقه‌ی زنده باید بافر را بخواند")
         # توقف — سپس transcribing (ترنسکرایب نهایی در thread جدا) و بعد idle + درج
         app.toggle_recording()
         self.assertTrue(wait_for(lambda: app.state == STATE_TRANSCRIBING),

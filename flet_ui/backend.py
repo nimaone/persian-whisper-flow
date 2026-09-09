@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import queue
 import subprocess
 import sys
 import threading
@@ -52,7 +53,7 @@ class DictationApp:
     def __init__(self, win, cfg: Config | None = None,
                  engine_loader=None, recorder_factory=None,
                  insert_fn=None, send_key_fn=None, device_probe=None,
-                 register_hotkey: bool = True):
+                 register_hotkey: bool = True, with_overlay: bool = True):
         self.win = win
         self.cfg = cfg or Config.load()
         self.state = STATE_LOADING
@@ -76,6 +77,54 @@ class DictationApp:
         self._engine_dirty = False  # هات‌وورد عوض شده — پس از ضبط rebuild شود
         self._hotkey_registered = ""
         self._settings_proc: subprocess.Popen | None = None
+
+        # پنجره زنده (Overlay) — Tk فقط از thread خودش؛ فرمان‌ها با صف
+        self._ov_q: queue.Queue = queue.Queue()
+        self._overlay = None
+        self._overlay_ready = threading.Event()
+        if with_overlay:
+            threading.Thread(target=self._overlay_loop, daemon=True).start()
+
+    # ---------- پنجره زنده (thread اختصاصی Tk) ----------
+    def _overlay_loop(self):
+        """قرینه‌ی _ui_loop در app/main.py — همه‌ی دستورات Tk از همین thread."""
+        try:
+            from app.overlay import Overlay
+            self._overlay = Overlay()
+        except Exception:
+            self._overlay_ready.set()
+            return  # بدون overlay هم برنامه کار می‌کند
+        self._overlay_ready.set()
+        while self._running:
+            try:
+                while True:
+                    op, arg = self._ov_q.get_nowait()
+                    if op == "show":
+                        self._overlay.set_font_size(
+                            int(self.cfg.get("overlay_font_size") or 15))
+                        self._overlay.show()
+                    elif op == "text":
+                        self._overlay.update_text(arg)
+                    elif op == "processing":
+                        self._overlay.set_processing()
+                    elif op == "hide":
+                        self._overlay.hide()
+                    elif op == "level":
+                        self._overlay.update_level(arg)
+            except queue.Empty:
+                pass
+            try:
+                self._overlay.tick()
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    def _ov(self, op, arg=None):
+        """فرمان به پنجره زنده — بی‌صدا اگر thread آن بالا نیامده."""
+        if not self._overlay_ready.wait(timeout=3):
+            return
+        if self._overlay is not None and self._running:
+            self._ov_q.put((op, arg))
 
     # ---------- راه‌اندازی ----------
     def start(self):
@@ -229,6 +278,8 @@ class DictationApp:
         self._ui_set_state(STATE_RECORDING)
         if self.cfg.get("sound_feedback"):
             _beep(start=True)
+        if self.cfg.get("overlay_enabled"):
+            self._ov("show")
         threading.Thread(target=self._partial_loop, daemon=True).start()
 
     def _stop_impl(self):
@@ -242,6 +293,8 @@ class DictationApp:
         rec.stop()
         if self.cfg.get("sound_feedback"):
             _beep(start=False)
+        # overlay بلافاصله بسته نمی‌شود؛ در حالت «در حال تشخیص» می‌ماند
+        self._ov("processing")
         self._ui_set_state(STATE_TRANSCRIBING)
         threading.Thread(target=self._finish, args=(rec,), daemon=True).start()
 
@@ -261,8 +314,7 @@ class DictationApp:
                     text = self.live.partial(buf)
                     if self.cfg.get("persian_itn"):
                         text = persian_itn.normalize_text(text, min_tokens=2)
-                    if text:
-                        self._set_status(text)
+                    self._ov("text", text)
                     # توقف خودکار پس از سکوت — فقط اگر قبلاً صدایی شنیده شده
                     if auto_stop > 0:
                         recent = buf[-int(1.5 * 16000):]
@@ -285,6 +337,7 @@ class DictationApp:
                 except Exception:
                     pass
             elapsed = time.perf_counter() - t0
+            self._ov("level", rec.recent_rms() if rec is not None else 0.0)
             time.sleep(max(0.05, PARTIAL_INTERVAL - elapsed))
 
     def _finish(self, rec):
@@ -299,6 +352,8 @@ class DictationApp:
         # اگر تنظیمات هات‌وورد وسط ضبط عوض شده بود، الان جای امن برای تعویض موتور است
         if self._engine_dirty:
             threading.Thread(target=self._rebuild_engine, daemon=True).start()
+        # بستن overlay بعد از ترنسکرایب نهایی (قبل از درج)
+        self._ov("hide")
         if not text:
             self._notify("صدایی تشخیص داده نشد — میکروفون یا سطح ورودی را بررسی کنید")
             return
