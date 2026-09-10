@@ -302,10 +302,17 @@ class TestSettingsWindow(SettingsTestBase):
         self.assertEqual(self.win.test_btn.content, "شروع تست")
 
     def test_test_button_toggles_label(self):
+        # تستر واقعی را فیک می‌کنیم — بدون میکروفون، فقط چرخه‌ی دکمه
+        import queue as _q
+        self.win._tester_q = _q.Queue()
+        import threading as _th
+        self.win._tester_stop = _th.Event()
+        self.win._start_tester = lambda: None     # فیک: بدون باز کردن InputStream
         self.win._toggle_test(None)     # شروع
         self.assertEqual(self.win.test_btn.content, "توقف تست")
-        self.win._toggle_test(None)     # توقف
+        self.win._end_test()           # توقف تمیز — مثل کلیک دکمه توقف
         self.assertEqual(self.win.test_btn.content, "شروع تست")
+        self.assertFalse(getattr(self.win, "_testing", False))
 
     def test_reset_restores_device_dropdown(self):
         # باگ رگرسیون: بازنشانی دستگاه ورودی را به خودکار برنمی‌گرداند
@@ -320,6 +327,122 @@ class TestSettingsWindow(SettingsTestBase):
         e = SimpleNamespace(control=SimpleNamespace(value="clipboard"), data="type")
         self.win._paste_changed(e)
         self.assertEqual(self.win.var_paste.value, "type")
+
+    def test_device_dropdown_starts_at_auto(self):
+        # باگ رگرسیون: دراپ‌داون میکروفون باید از روی config مقدار بگیرد؛
+        # None یعنی «خودکار» — انتخاب دستگاه نباید باعث از دست رفتن ذخیره شود
+        self.assertEqual(self.win.var_device.value, self.win.auto_label)
+
+    def test_selected_device_parses_from_value(self):
+        # بعد از انتخاب آیتم (فلت خودش value را ست می‌کند)، _selected_device
+        # باید اندیس دستگاه را دربیاورد و _save باید input_device را ذخیره کند
+        opts = [str(o.key) for o in self.win.var_device.options]
+        mic_opt = next(o for o in opts if o.startswith("["))
+        self.win.var_device.value = mic_opt
+        idx = self.win._selected_device()
+        self.assertIsNotNone(idx)
+        self.assertIsInstance(idx, int)
+        # مسیر ذخیره: _collect + input_device مثل _save
+        data = self.win._collect()
+        data["input_device"] = self.win._selected_device()
+        self.assertEqual(data["input_device"], idx)
+
+    def test_apply_shows_saved_device_in_dropdown(self):
+        # باگ رگرسیون: _apply فقط حالت None را هندل می‌کرد؛ دستگاه ذخیره‌شده
+        # باید در کمبو نمایش داده شود وگرنه کاربر فکر می‌کند ذخیره نشده
+        opts = [str(o.key) for o in self.win.var_device.options]
+        mic_opt = next(o for o in opts if o.startswith("["))
+        idx = int(mic_opt.split("]")[0][1:])
+        data = dict(DEFAULTS)
+        data["input_device"] = idx
+        self.win._apply(data)
+        self.assertEqual(self.win.var_device.value, mic_opt)
+        # و بازگشت به خودکار
+        self.win._apply(dict(DEFAULTS))
+        self.assertEqual(self.win.var_device.value, self.win.auto_label)
+
+    def test_load_returns_dict_from_disk(self):
+        # باگ رگرسیون: _load قبلاً dict(Config.load()) می‌زد که TypeError
+        # می‌داد (Config شیء است نه dict) و except بی‌صدا DEFAULTS برمی‌گرداند
+        # → دستگاه ذخیره‌شده همیشه «خودکار» دیده می‌شد.
+        # _load واقعی باید dict برگرداند و کلیدهای دیسک را داشته باشد.
+        from flet_ui.settings_window import SettingsWindow
+        d = SettingsWindow._load(object.__new__(SettingsWindow))
+        self.assertIsInstance(d, dict)
+        for key in DEFAULTS:
+            self.assertIn(key, d, key)
+
+    def test_spectrum_bars_are_in_stack_with_fixed_left(self):
+        # باگ رگرسیون: میله‌ها در Row با layout-END بودند و تغییر height کل
+        # TabBarView را باز-layout می‌کرد → انیمیشن بی‌حرکت. الان Stack با
+        # left ثابت است.
+        self.assertIsInstance(self.win.spec_stack, ft.Stack)
+        self.assertEqual(len(self.win._bars), 48)
+        for i, bar in enumerate(self.win._bars):
+            self.assertEqual(bar.left, (47 - i) * 9, f"bar {i}")
+
+    def test_animation_moves_bar_heights(self):
+        # باگ رگرسیون: تست صدا باید از RMS واقعی میکروفون مواج بسازد.
+        # فیک تستر: صف از قبل RMS دارد → تیک اول باید میله‌ها را بلند کند
+        # و حکم سبز «کار می‌کند» بدهد.
+        import queue as _q
+        import threading as _th
+        self.win._tester_q = _q.Queue()
+        self.win._tester_stop = _th.Event()
+        self.win._start_tester = lambda: None     # فیک: بدون InputStream
+        for _ in range(4):
+            self.win._tester_q.put(("rms", 0.03))  # صدای بلند
+        self.win._toggle_test(None)     # شروع — تیک اول صف را می‌خواند
+        moved = [b for b in self.win._bars if b.height > 3]
+        self.assertTrue(moved, "با صدای تزریقی باید میله‌ها بلند شوند")
+        colors = {b.bgcolor for b in self.win._bars}
+        self.assertTrue(colors & {"#22c55e", "#4f8f68"},
+                        "میله‌های فعال باید رنگ موج بگیرند")
+        self.assertEqual(self.win.verdict.value, "میکروفون کار می‌کند — صدای واضح")
+        self.assertEqual(self.win.verdict.color, "#22c55e")  # ACCENT
+        self.win._end_test()           # توقف تمیز — تایمر و میله‌ها
+        self.assertTrue(all(b.height == 3 for b in self.win._bars))
+        self.assertEqual(self.win.test_btn.content, "شروع تست")
+
+    def test_animation_silence_shows_no_signal(self):
+        # بدون صدا: RMS=0 → حکم قرمز «سیگنالی نمی‌آید»؛ موج پایه‌ی نفس
+        # عمداً زنده است (تا کاربر بفهمد تست اجراست) ولی دامنه‌ی محدود —
+        # میله‌ها نباید از ~۸px (نفس) بلندتر شوند
+        import queue as _q
+        import threading as _th
+        self.win._tester_q = _q.Queue()
+        self.win._tester_stop = _th.Event()
+        self.win._start_tester = lambda: None
+        self.win._toggle_test(None)     # شروع — صف خالی → RMS=0
+        heights = [b.height for b in self.win._bars]
+        self.assertLessEqual(max(heights), 10.0,
+                             "نفس پایه نباید از ~۸px بلندتر شود")
+        self.assertGreaterEqual(max(heights), 4.0,
+                                "نفس پایه باید مرئی باشد")
+        self.assertEqual(self.win.verdict.value, "سیگنالی نمی‌آید — دستگاه دیگری را امتحان کن")
+        self.assertEqual(self.win.verdict.color, "#e5484d")  # DANGER
+        self.win._end_test()
+
+    def test_toggle_test_stops_on_stream_error(self):
+        # باگ رگرسیون: اگر باز کردن میکروفون خطا بدهد، دکمه باید به
+        # «شروع تست» برگردد و حکم خطا قرمز نمایش داده شود
+        import queue as _q
+        import threading as _th
+        self.win._tester_q = _q.Queue()
+        self.win._tester_stop = _th.Event()
+        self.win._start_tester = lambda: None
+        self.win._toggle_test(None)     # شروع
+        self.win._tester_q.put(("err", "device not found"))
+        # تیک بعدی ارور را می‌خواند — صبر برای یک تیک تایمر (80ms)
+        import time
+        deadline = time.monotonic() + 1.0
+        while self.win.test_btn.content == "توقف تست" and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertEqual(self.win.test_btn.content, "شروع تست",
+                         "خطای استریم باید تست را خاموش کند")
+        self.assertTrue(self.win.verdict.value.startswith("خطا:"))
+        self.assertEqual(self.win.verdict.color, "#e5484d")
+        self.assertFalse(getattr(self.win, "_testing", False))
 
 
 # ---------- هلپرهای تم ----------

@@ -1,10 +1,12 @@
 """پنجره تنظیمات دیکته‌یار با Flet — قرینه‌ی app/settings_ui.py.
 
 ۵ تب: عمومی، میکروفون، درج متن، پیشرفته، راهنما.
-همان کارت‌ها، همان متن‌ها، همان تم. حالت‌های زنده (تست میکروفون)
-در این نسخه فقط نمایشی است؛ منطق اصلی با MicTester نسخه‌ی CTk حلق می‌شود.
+همان کارت‌ها، همان متن‌ها، همان تم. تست صدا با ضبط واقعی RMS
+(قرینه‌ی MicTester نسخه‌ی CTk) و انیمیشن روی ایونت‌لوپ فلت.
 """
 from __future__ import annotations
+
+import asyncio
 
 import flet as ft
 
@@ -94,13 +96,10 @@ class SettingsWindow:
             )
         )
 
-    # ---------- داده‌ی config (برای دمو از DEFAULTS استفاده می‌کند) ----------
+    # ---------- داده‌ی config (dict خام؛ None یعنی DEFAULTS) ----------
     def _load(self) -> dict:
-        try:
-            from app.config import Config
-            return dict(Config.load())
-        except Exception:
-            return dict(DEFAULTS)
+        from app.config import Config
+        return dict(Config.load().data)
 
     # ================================================= عمومی
     def _tab_general(self):
@@ -165,23 +164,44 @@ class SettingsWindow:
             devices = ["خودکار (پرسیگنال‌ترین)"]
         self.auto_label = "خودکار (پرسیگنال‌ترین)"
         values = [self.auto_label] + devices
-        self.var_device = t.dropdown(values, values[0], height=36)
+        cur_dev = cfg.get("input_device")
+        init_val = values[0]
+        if cur_dev is not None:
+            match = [v for v in values if v.startswith(f"[{cur_dev}]")]
+            if match:
+                init_val = match[0]
+        self.var_device = t.dropdown(values, init_val, height=36)
 
         c_dev = t.card("دستگاه ورودی", self.var_device)
         c_dev.content.controls.append(
             t.dim("خودکار = پرسیگنال‌ترین میکروفون فعال در شروع هر ضبط")
         )
 
-        # ---------- تست صدا (نوارهای نمایشی — در نسخه‌ی CTk زنده است) ----------
-        self.spec_row = ft.Row([], spacing=3, height=28,
-                               alignment=ft.MainAxisAlignment.END)
+        # ---------- تست صدا — ضبط واقعی RMS با MicTester (قرینه‌ی CTk) ----------
+        # Stack با میله‌های left ثابت و کفِ ثابت (bottom=4 مثل خط کفی
+        # SPECS_H+4 در CTk): میله از پایین به بالا رشد می‌کند و تغییر
+        # height فقط خودِ میله را رندر می‌کند.
+        self._bars: list[ft.Container] = []
+        for i in range(48):
+            self._bars.append(ft.Container(width=6, height=3,
+                                           bgcolor=t.SURFACE_3,
+                                           border_radius=2,
+                                           left=(47 - i) * 9,
+                                           bottom=4))
+        self.spec_stack = ft.Stack(self._bars, width=435, height=28)
         self.verdict = ft.Text("", style=t.fam("bold", 13), text_align=ft.TextAlign.RIGHT)
         self.test_btn = ft.ElevatedButton(
             content="شروع تست", on_click=self._toggle_test, width=120, height=34,
             bgcolor=t.SURFACE_2, color=t.FG,
             style=t.btn_style(weight="bold"),
         )
-        c_test = t.card("تست صدا", self.spec_row, self.verdict, self.test_btn)
+        # ترتیب و چینش مثل CTk: موج → دکمه وسط‌چین → حکم. Rowها
+        # تمام‌عرض می‌گیرند و کارت را مثل fill="x" پُر می‌کنند — وگرنه
+        # Stackِ تنها عرض کارت را به اندازه‌ی خودش محدود می‌کند.
+        c_test = t.card("تست صدا",
+                        ft.Row([self.spec_stack]),
+                        ft.Row([self.test_btn], alignment=ft.MainAxisAlignment.CENTER),
+                        self.verdict)
 
         auto_stop_labels = ["خاموش", "۳ ثانیه", "۵ ثانیه", "۱۰ ثانیه"]
         self.var_auto_stop = t.dropdown(
@@ -204,45 +224,209 @@ class SettingsWindow:
 
         return ft.Column([c_dev, c_test, c_beh], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
 
-    def _toggle_test(self, e):
-        """دموی نمایشی موج — در نسخه‌ی CTk به MicTester وصل است.
+    def _safe_update(self, ctrl):
+        """آپدیت یک کنترل — بی‌صدا اگر به صفحه وصل نیست (تست/پنجره بسته)."""
+        try:
+            ctrl.update()
+        except Exception:
+            try:
+                self.page.update()
+            except Exception:
+                pass
 
-        Flet تایمر GUI ندارد؛ از threading.Timer استفاده می‌کنیم و آپدیت
-        کنترل‌ها (thread-safe در Flet) از ترد پس‌زمینه انجام می‌شود.
+    def _page_alive(self) -> bool:
+        """پنجره هنوز باز است؟ (توقف تایمر تست بعد از بستن پنجره)"""
+        try:
+            _ = self.page.window
+            return True
+        except Exception:
+            return False
+
+    # ---------- تست صدا: ضبط واقعی RMS (قرینه‌ی MicTester در CTk) ----------
+    def _start_tester(self):
+        """MicTester را روی دستگاه انتخابی روشن کن؛ None → بهترین دستگاه.
+
+        صف و رویدادِ توقف، محلیِ کلوژرِ ترد گرفته می‌شوند — نه attribute —
+        تا تردِ تستر قبلی با Event خودش قطعاً تمام شود و به صف تازه نریزد.
         """
-        import math, random, threading
-        from time import monotonic as _mono
+        import queue as _q
+        import threading as _th
+
+        self._stop_tester()   # هر تستر قبلی خاموش شود
+        q: _q.Queue = _q.Queue()
+        stop = _th.Event()
+        self._tester_q = q
+        self._tester_stop = stop
+
+        dev = self._selected_device()
+        if dev is None:
+            # خودکار = همان دستگاهی که ضبط واقعی استفاده می‌کند
+            try:
+                from app.recorder import detect_best_device
+                dev = detect_best_device()
+            except Exception:
+                dev = None
+            if dev is None:
+                import sounddevice as sd
+                dev = int(sd.default.device[0])
+
+        def run():
+            import numpy as np
+            try:
+                import sounddevice as sd
+                d = sd.query_devices(dev, "input")
+                sr = int(d["default_samplerate"])
+
+                def cb(indata, frames, t, status):
+                    if stop.is_set():
+                        raise sd.CallbackStop
+                    rms = float(np.sqrt((indata[:, 0].astype(np.float64) ** 2).mean()))
+                    try:
+                        q.put_nowait(("rms", rms))
+                    except _q.Full:
+                        pass
+
+                with sd.InputStream(device=dev, channels=1, samplerate=sr,
+                                    dtype="float32", blocksize=int(sr * 0.05),
+                                    callback=cb):
+                    while not stop.is_set():
+                        _th.Event().wait(0.05)
+            except Exception as e:
+                try:
+                    q.put_nowait(("err", str(e)[:60]))
+                except _q.Full:
+                    pass
+
+        _th.Thread(target=run, daemon=True).start()
+
+    def _stop_tester(self):
+        """قطع ضبط تست — بی‌صدا اگر هرگز روشن نشده بود."""
+        if hasattr(self, "_tester_stop"):
+            self._tester_stop.set()
+
+    def _toggle_test(self, e):
+        """شروع/توقف تست صدا — صدای واقعی میکروفون، مواج از RMS.
+
+        حلقه‌ی انیمیشن باید روی ایونت‌لوپ فلت برود — داکیومنت رسمی:
+        page.run_task = «Run handler coroutine as a new Task in the event
+        loop». آپدیت از تردِ threading.Timer به صف‌ی ارسال کلاینت
+        (asyncio.Queue) نمی‌رسد و هیچ‌وقت رندر نمی‌شود؛ میله‌ها در Stack
+        با left ثابت‌اند و یک update() والد، دیف همه‌ی میله‌ها را می‌فرستد.
+        """
         self._testing = not getattr(self, "_testing", False)
         self.test_btn.content = "توقف تست" if self._testing else "شروع تست"
+        self._safe_update(self.test_btn)
         if self._testing:
-            bars = [0.0] * 48
-            t0 = _mono()
-
-            def tick():
-                if not self._testing:
-                    return
-                bars[:-1] = bars[1:]
-                bars[-1] = min(1.0, abs(random.random() * (1 + math.sin(_mono() - t0))))
-                self.spec_row.controls = [
-                    ft.Container(width=6, height=max(3, v * 28),
-                                 bgcolor=t.ACCENT if v > 0.5 else
-                                        ("#4f8f68" if v > 0.15 else t.SURFACE_3),
-                                 border_radius=2, alignment=ft.Alignment(0, 1))
-                    for i, v in enumerate(reversed(bars))
-                ]
-                self.verdict.value = "میکروفون کار می‌کند — صدای واضح"
-                self.verdict.color = t.ACCENT
-                try:
-                    self.page.update()
-                except Exception:
-                    return  # پنجره بسته شده
-                threading.Timer(0.08, tick).start()
-
-            tick()
+            self._start_tester()
+            vals = [0.0] * 48
+            # پله‌ی تطبیقی (AGC): env نرمِ بیشینه‌ی صدای شنیده‌شده است؛
+            # تقسیم rms/0.04 ثابت روی میکروفون‌های کم‌صدا موج را زیر
+            # پیکسل می‌برد و انیمیشن دیده نمی‌شود. env با v واقعی بالا
+            # می‌رود و آرام پایین می‌آید تا موج همیشه مرئی باشد.
+            env = [0.004]   # شروع از آستانه‌ی «صدای واضح» CTk
+            run_task = getattr(self.page, "run_task", None)
+            if run_task is not None:
+                # مسیر اصلی: Task روی ایونت‌لوپ — تیک‌ها رندر می‌شوند
+                self._test_task = run_task(self._anim_loop, vals, env)
+            else:
+                # MockPage (تست‌ها): بدون ایونت‌لوپ — تیک اول sync + تایمر
+                if self._tick_once(vals, env):
+                    self._start_timer(vals, env)
         else:
-            self.spec_row.controls = []
+            self._stop_tester()
+            for bar in self._bars:
+                bar.height = 3
+                bar.bgcolor = t.SURFACE_3
             self.verdict.value = ""
-            self.page.update()
+            self._safe_update(self.spec_stack)
+            self._safe_update(self.verdict)
+
+    def _tick_once(self, vals: list, env: list) -> bool:
+        """یک تیک انیمیشن — میله‌ها و حکم را تازه می‌کند؛ False یعنی توقف."""
+        if not getattr(self, "_testing", False):
+            return False
+        # داده‌ی جدید از میکروفون — حداکثر RMS از همه‌ی بلاک‌های صف
+        got_err = None
+        rms = 0.0
+        while True:
+            try:
+                kind, v = self._tester_q.get_nowait()
+            except Exception:
+                break
+            if kind == "err":
+                got_err = v
+            else:
+                rms = max(rms, v)
+        if got_err:
+            self._testing = False
+            self._stop_tester()
+            self.test_btn.content = "شروع تست"
+            self._safe_update(self.test_btn)
+            self.verdict.value = f"خطا: {got_err}"
+            self.verdict.color = t.DANGER
+            self._safe_update(self.verdict)
+            return False
+        # پله‌ی تطبیقی: بالا رفتن سریع، افت آرام (~۲s تا نصف)
+        if rms > env[0]:
+            env[0] = rms
+        else:
+            env[0] = max(0.0008, env[0] * 0.985)
+        # موج نمایشی: صدای واقعی نسبت به پله، + نفس‌کشیدن همیشگی —
+        # حتی دستگاه کاملاً ساکت باید خط پایه‌ی زنده نشان دهد تا
+        # کاربر بفهمد تست در حال اجراست (مثل موج خنثی CTk)
+        import random as _rnd
+        breath = 0.18 + 0.10 * _rnd.random()  # نفس پایه ۱۸–۲۸٪
+        speech = min(1.0, rms / (env[0] * 1.5)) if rms > 0 else 0.0
+        vals[:-1] = vals[1:]
+        vals[-1] = max(breath, speech)
+        for bar, v in zip(self._bars, reversed(vals)):
+            bar.height = max(3, v * 20)   # SPECS_H=20 مثل CTk
+            bar.bgcolor = (t.ACCENT if v > 0.5 else
+                           "#4f8f68" if v > 0.15 else
+                           "#3c3c3c" if v > 0.02 else "#2e2e2e")
+        # حکم سه‌سطحی مثل CTk — از RMS خام، نه مقیاس‌شده
+        if rms > 0.004:
+            self.verdict.value = "میکروفون کار می‌کند — صدای واضح"
+            self.verdict.color = t.ACCENT
+        elif rms > 0.0005:
+            self.verdict.value = "صدای خیلی کم — تقویت ورودی را بالا ببر"
+            self.verdict.color = t.WARN
+        else:
+            self.verdict.value = "سیگنالی نمی‌آید — دستگاه دیگری را امتحان کن"
+            self.verdict.color = t.DANGER
+        # یک update والد = یک پیام برای دیف کل ۴۸ میله + حکم
+        self._safe_update(self.spec_stack)
+        self._safe_update(self.verdict)
+        if not self._page_alive():
+            self._testing = False
+            self._stop_tester()
+            return False  # پنجره بسته شده — تیک بعدی هم معنا ندارد
+        return True
+
+    async def _anim_loop(self, vals: list, env: list):
+        """حلقه‌ی انیمیشن تست صدا — به‌عنوان Task روی ایونت‌لوپ فلت.
+
+        تیک‌ها روی ترد ایونت‌لوپ اجرا می‌شوند تا پچ‌ها واقعاً به صف‌ی
+        ارسال کلاینت برسند؛ asyncio.sleep جای تایمر را می‌گیرد.
+        """
+        try:
+            while getattr(self, "_testing", False):
+                if not self._tick_once(vals, env):
+                    return
+                await asyncio.sleep(0.08)
+        except Exception:
+            pass  # صفحه/پنجره بسته شده — لوپ تمام
+
+    def _start_timer(self, vals: list, env: list):
+        """مسیر پشتیبان برای محیط بدون ایونت‌لوپ (تست‌های MockPage)."""
+        import threading
+        self._test_timer = threading.Timer(0.08, self._tick_timer, args=(vals, env))
+        self._test_timer.daemon = True
+        self._test_timer.start()
+
+    def _tick_timer(self, vals: list, env: list):
+        if self._tick_once(vals, env):
+            self._start_timer(vals, env)
 
     # ================================================= درج متن
     def _tab_insert(self):
@@ -410,16 +594,23 @@ class SettingsWindow:
             .get(int(data.get("auto_stop_sec") or 0), "خاموش")
         self.var_hotword.value = bool(data.get("hotword_boost"))
         self.txt_hotwords.value = "\n".join(str(w) for w in (data.get("hotwords") or []))
-        # دستگاه ورودی — None یعنی خودکار؛ مثل _sync در CTk که dev_combo را
-        # روی auto_label می‌گذاشت
-        if data.get("input_device") is None:
+        # دستگاه ورودی — None یعنی خودکار؛ دستگاه ذخیره‌شده باید در کمبو
+        # نمایش داده شود (قرینه‌ی current_name در CTk)
+        dev = data.get("input_device")
+        if dev is None:
             self.var_device.value = self.auto_label
+        else:
+            match = [v for v in self.var_device.options
+                     if str(v.key).startswith(f"[{dev}]")]
+            self.var_device.value = match[0].key if match else self.auto_label
 
     def _reset(self, e=None):
+        self._end_test()
         self._apply(dict(DEFAULTS))
         self.page.update()
 
     async def _save(self, e=None):
+        self._end_test()
         data = self._collect()
         data["input_device"] = self._selected_device()
         # ذخیره‌ی واقعی روی دیسک — مثل save() نسخه CTk
@@ -433,9 +624,34 @@ class SettingsWindow:
         await self._close()
 
     async def _close(self, e=None):
+        # قطع ضبط تست قبل از بستن — تایمر/InputStream نباید بعد از پنجره زنده بماند
+        self._end_test()
         # Window.destroy در Flet 0.86 کوروتین است — اگر هندلر sync باشد
         # کوروتین هیچ‌وقت await نمی‌شود و پنجره باز می‌ماند.
         await self.page.window.destroy()
+
+    def _end_test(self):
+        """توقف کامل تست صدا از هر مسیر — دکمه، ذخیره، انصراف، بستن پنجره."""
+        if getattr(self, "_testing", False):
+            self._testing = False
+            self.test_btn.content = "شروع تست"
+            self._safe_update(self.test_btn)
+        self._stop_tester()
+        task = getattr(self, "_test_task", None)
+        if task is not None:
+            try:
+                task.cancel()
+            except Exception:
+                pass
+            self._test_task = None
+        timer = getattr(self, "_test_timer", None)
+        if timer is not None:
+            timer.cancel()
+            self._test_timer = None
+        for bar in getattr(self, "_bars", []):
+            bar.height = 3
+            bar.bgcolor = t.SURFACE_3
+            self._safe_update(bar)
 
     def show(self):
         """نمایش به‌عنوان دیالوگ — تا بسته شود صبر می‌کند."""
