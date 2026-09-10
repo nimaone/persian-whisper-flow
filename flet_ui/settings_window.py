@@ -13,6 +13,28 @@ import flet as ft
 from app.config import APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config
 from flet_ui import theme as t
 
+HK_HINT = "برای ثبت میان‌بر جدید، روی کادر کلیک کن و ترکیب دلخواه را بفشار (لغو: Esc)"
+HK_BAD = "ترکیب باید شامل کلید ترکیبی (کنترل، آلت یا شیفت) باشد، یا یک کلید F"
+HK_INVALID = "کلید میانبر نامعتبر است"
+HW_EMPTY = "حالت واژه‌های حساس روشن است ولی هیچ واژه‌ای وارد نشده"
+_MOD_MAP = {"left ctrl": "ctrl", "right ctrl": "ctrl",
+            "left shift": "shift", "right shift": "shift",
+            "left alt": "alt", "right alt": "alt"}
+_WIN_KEYS = ("left windows", "right windows")
+
+
+def _valid_hotkey(hk: str) -> bool:
+    """اعتبارسنجی ترکیب میان‌بر — قرینه‌ی _valid_hotkey نسخه CTk."""
+    parts = [p for p in hk.split("+") if p]
+    if not parts:
+        return False
+    if parts[-1] in ("ctrl", "shift", "alt"):
+        return False  # کلید نهایی نمی‌تواند خودِ modifier باشد
+    if len(parts) == 1:
+        # تک‌کلیدی فقط برای F-keyها مجاز است
+        return parts[0].startswith("f") and parts[0][1:].isdigit()
+    return True
+
 
 class SettingsWindow:
     """قرینه‌ی open_settings — هر متد عمومی با نسخه‌ی CTk هم‌نام است."""
@@ -104,13 +126,16 @@ class SettingsWindow:
     # ================================================= عمومی
     def _tab_general(self):
         cfg = self.cfg
+        # فقط‌خواندنی — ترکیب با کیبورد کپچر می‌شود، تایپ دستی نه
+        # (قرینه‌ی bind("<Key>", capture_hotkey) در CTk)
         self.var_hotkey = ft.TextField(
-            value=cfg.get("hotkey"), read_only=False, expand=True,
+            value=cfg.get("hotkey"), read_only=True,
+            on_focus=self._hk_focus, on_blur=self._hk_blur, expand=True,
             bgcolor=t.SURFACE_2, border_color=t.BORDER, border_radius=8,
             text_style=t.fam("Regular", 14), height=40, rtl=True,
         )
         self.hk_hint = ft.Text(
-            "برای ثبت میان‌بر جدید، روی کادر کلیک کن و ترکیب دلخواه را بفشار (لغو: Esc)",
+            HK_HINT,
             style=t.fam("Regular", 12), color=t.FG_DIM, text_align=ft.TextAlign.RIGHT,
         )
 
@@ -152,6 +177,96 @@ class SettingsWindow:
         self.font_lbl.value = f"اندازه متن: {v}"
         self.sample.style = t.fam("Regular", v)
         self.page.update()
+
+    # ---------- کپچر کلید میانبر (قرینه‌ی capture_hotkey در CTk) ----------
+    # فلگ‌های ctrl/alt در KeyboardEvent کلاینت ویندوز فلت قابل اعتماد
+    # نیستند (اسپایک: حتی با SendInput واقعی False می‌آیند) — وضعیت
+    # modifier از جریان hook کتابخانه‌ی keyboard ساخته می‌شود؛ همان
+    # کتابخانه‌ای که اپ برای ثبت هات‌کی به‌کار می‌برد، پس نام کلیدها
+    # (وابسته به لی‌اوت) با ثبت نهایی سازگار است.
+    def _set_hk_hint(self, text: str, color: str):
+        self.hk_hint.value = text
+        self.hk_hint.color = color
+        self._schedule_update()
+
+    def _schedule_update(self):
+        """ارسال پچ از ایونت‌لوپ فلت — کال‌بک hook در ترد خودش اجرا
+        می‌شود و put_nowait از ترد فرعی به صف ارسال کلاینت نمی‌رسد."""
+        run_task = getattr(self.page, "run_task", None)
+        if run_task is not None:
+            run_task(self._flush_update)
+        else:
+            self._safe_update(self.hk_hint)    # MockPage — مسیر sync تست
+            self._safe_update(self.var_hotkey)
+
+    async def _flush_update(self):
+        try:
+            self.page.update()
+        except Exception:
+            pass  # پنجره بسته شده
+
+    def _hk_hook_on(self):
+        try:
+            import keyboard as kb
+            kb.hook(self._hk_raw)
+            self._hk_hooked = True
+        except Exception:
+            self._hk_hooked = False
+
+    def _hk_hook_off(self):
+        if getattr(self, "_hk_hooked", False):
+            self._hk_hooked = False
+            try:
+                import keyboard as kb
+                kb.unhook(self._hk_raw)
+            except Exception:
+                pass
+
+    def _hk_focus(self, e=None):
+        self._hk_capturing = True
+        self._hk_prev = self.var_hotkey.value
+        self._hk_mods = set()
+        self._hk_hook_on()
+        self._set_hk_hint(HK_HINT, t.FG_DIM)
+
+    def _hk_blur(self, e=None):
+        self._hk_capturing = False
+        self._hk_mods = set()
+        self._hk_hook_off()
+
+    def _hk_raw(self, e):
+        """کال‌بک hook کتابخانه keyboard — روی ترد hook اجرا می‌شود.
+
+        Esc = لغو و بازگشت به مقدار قبلی؛ کلیدهای modifier فقط وضعیت
+        می‌سازند؛ تک‌کلیدی بدون modifier تایپ عادی ویندوز را می‌شکند
+        (فقط F-key مجاز — مثل CTk).
+        """
+        name = e.name
+        if e.event_type == "up":
+            mod = _MOD_MAP.get(name)
+            if mod:
+                self._hk_mods.discard(mod)
+            return
+        if not getattr(self, "_hk_capturing", False):
+            return
+        mod = _MOD_MAP.get(name)
+        if mod:
+            self._hk_mods.add(mod)
+            return
+        if name in _WIN_KEYS:
+            return
+        if name == "esc":
+            self.var_hotkey.value = getattr(self, "_hk_prev", "") or ""
+            self._set_hk_hint(HK_HINT, t.FG_DIM)
+            return
+        mods = [m for m in ("ctrl", "shift", "alt")
+                if m in getattr(self, "_hk_mods", set())]
+        if not mods and not (name.startswith("f") and name[1:].isdigit()):
+            self.var_hotkey.value = getattr(self, "_hk_prev", "") or ""
+            self._set_hk_hint(HK_BAD, t.DANGER)
+            return
+        self.var_hotkey.value = "+".join(mods + [name])
+        self._set_hk_hint(HK_HINT, t.FG_DIM)
 
     # ================================================= میکروفون
     def _tab_mic(self):
@@ -375,7 +490,7 @@ class SettingsWindow:
         # حتی دستگاه کاملاً ساکت باید خط پایه‌ی زنده نشان دهد تا
         # کاربر بفهمد تست در حال اجراست (مثل موج خنثی CTk)
         import random as _rnd
-        breath = 0.18 + 0.10 * _rnd.random()  # نفس پایه ۱۸–۲۸٪
+        breath = 0.22 + 0.13 * _rnd.random()  # نفس پایه ۲۲–۳۵٪ (SPECS_H=20)
         speech = min(1.0, rms / (env[0] * 1.5)) if rms > 0 else 0.0
         vals[:-1] = vals[1:]
         vals[-1] = max(breath, speech)
@@ -495,10 +610,15 @@ class SettingsWindow:
             content_padding=ft.Padding(left=10, top=8, right=10, bottom=8),
         )
         self.txt_hotwords.value = "\n".join(str(w) for w in (cfg.get("hotwords") or []))
+        # پیام خطای هات‌وورد — زیر کادر، جایی که کاربر هست (در CTk روی
+        # برچسب هات‌کی در تب دیگر می‌رفت و دیده نمی‌شد)
+        self.hw_hint = ft.Text("", style=t.fam("Regular", 12), color=t.DANGER,
+                               text_align=ft.TextAlign.RIGHT)
         c_hw = t.card(
             "واژه‌های حساس (هات‌وورد) — آزمایشی",
             ft.Row([t.row_label("تقویت واژه‌های مشخص هنگام تشخیص"), self.var_hotword]),
             self.txt_hotwords,
+            self.hw_hint,
             t.dim("هر خط یک واژه، حداقل ۲ حرف — اسم‌ها و برندهایی که مدل مدام اشتباه می‌گیرد"),
             t.dim("با روشن‌کردن، پردازش کمی کندتر می‌شود و ممکن است نشانه‌های پایانی جمله (مثل نقطه) هم درج شوند"),
         )
@@ -550,7 +670,7 @@ class SettingsWindow:
         auto_stop_labels = {"خاموش": 0, "۳ ثانیه": 3, "۵ ثانیه": 5, "۱۰ ثانیه": 10}
         hw_on = bool(self.var_hotword.value)
         return {
-            "hotkey": self.var_hotkey.value.strip(),
+            "hotkey": (self.var_hotkey.value or "").strip(),
             "paste_method": self.var_paste.value or "clipboard",
             "voice_commands": bool(self.var_commands.value),
             "persian_itn": bool(self.var_itn.value),
@@ -607,12 +727,36 @@ class SettingsWindow:
     def _reset(self, e=None):
         self._end_test()
         self._apply(dict(DEFAULTS))
+        self._set_hk_hint(HK_HINT, t.FG_DIM)
+        if getattr(self, "hw_hint", None) is not None:
+            self.hw_hint.value = ""
+            self._safe_update(self.hw_hint)
         self.page.update()
+
+    def _validate(self, data: dict):
+        """اعتبارسنجی پیش از ذخیره — قرینه‌ی save() نسخه CTk.
+
+        خروجی: (برچسب خطا، پیام) یا None یعنی مجاز. ذخیره‌ی تنظیمات
+        خراب (هات‌کی بی‌اثر، هات‌وورد بی‌واژه) رد می‌شود.
+        """
+        if not _valid_hotkey(str(data.get("hotkey") or "").strip()):
+            return ("hotkey", HK_INVALID)
+        if data.get("hotword_boost") and not data.get("hotwords"):
+            return ("hotwords", HW_EMPTY)
+        return None
 
     async def _save(self, e=None):
         self._end_test()
         data = self._collect()
         data["input_device"] = self._selected_device()
+        err = self._validate(data)
+        if err is not None:
+            where, msg = err
+            lbl = self.hk_hint if where == "hotkey" else self.hw_hint
+            lbl.value = msg
+            lbl.color = t.DANGER
+            self._safe_update(lbl)
+            return  # مثل CTk: پنجره باز می‌ماند و ذخیره نمی‌شود
         # ذخیره‌ی واقعی روی دیسک — مثل save() نسخه CTk
         loaded = Config.load()
         for k, v in data.items():
@@ -624,8 +768,10 @@ class SettingsWindow:
         await self._close()
 
     async def _close(self, e=None):
-        # قطع ضبط تست قبل از بستن — تایمر/InputStream نباید بعد از پنجره زنده بماند
+        # قطع ضبط تست و کپچر هات‌کی قبل از بستن — InputStream/hook
+        # نباید بعد از پنجره زنده بمانند
         self._end_test()
+        self._hk_blur()
         # Window.destroy در Flet 0.86 کوروتین است — اگر هندلر sync باشد
         # کوروتین هیچ‌وقت await نمی‌شود و پنجره باز می‌ماند.
         await self.page.window.destroy()
@@ -652,9 +798,3 @@ class SettingsWindow:
             bar.height = 3
             bar.bgcolor = t.SURFACE_3
             self._safe_update(bar)
-
-    def show(self):
-        """نمایش به‌عنوان دیالوگ — تا بسته شود صبر می‌کند."""
-        self.page.window.prevent_close = True
-        self.page.window.on_dismiss = self._close
-        self.page.show_dialog = None  # placeholder — Flet window در نسخه‌ی کامل

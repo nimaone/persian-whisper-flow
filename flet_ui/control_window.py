@@ -109,7 +109,7 @@ class ControlWindow:
             self._set_btn_enabled(False)
             self.status_text.value = "متن را می‌نویسد…"
             self.hint_text.value = ""
-        self.page.update()
+        self._schedule_update()
 
     def _set_btn_enabled(self, enabled: bool, fg=None, hover=None, txt=None):
         self.rec_btn.disabled = not enabled
@@ -120,9 +120,32 @@ class ControlWindow:
 
     def set_status(self, msg: str):
         self.status_text.value = msg
-        self.page.update()
+        self._schedule_update()
 
     def set_error(self, msg: str):
         self.status_text.value = f"خطا: {msg[:60]}"
         self.status_text.color = t.DANGER
-        self.page.update()
+        self._schedule_update()
+
+    # ---------- ارسال آپدیت از ایونت‌لوپ ----------
+    def _schedule_update(self):
+        """ارسال پچ‌ها باید از ترد ایونت‌لوپ فلت انجام شود — داکیومنت رسمی:
+        page.run_task کوروتین را به‌عنوان Task روی ایونت‌لوپ اجرا می‌کند.
+        put_nowait روی صف asyncio از ترد فرعی (هات‌کی/worker ضبط) تسکِ
+        ارسال را بیدار نمی‌کند و آپدیت هرگز رندر نمی‌شود. تغییر خودِ
+        props از هر تردی امن است؛ فقط ارسال باید روی لوپ برود.
+        """
+        run_task = getattr(self.page, "run_task", None)
+        if run_task is not None:
+            run_task(self._flush_update)
+        else:
+            try:
+                self.page.update()   # MockPage (تست‌ها) — بدون ایونت‌لوپ
+            except Exception:
+                pass  # پنجره بسته شده
+
+    async def _flush_update(self):
+        try:
+            self.page.update()
+        except Exception:
+            pass  # پنجره بسته شده

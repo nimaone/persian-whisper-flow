@@ -237,10 +237,10 @@ class BackendConfig(unittest.TestCase):
         app.apply_config()
         self.assertEqual(app.device, 3)
         self.assertTrue(app._device_ready.is_set())
-        # بازگشت به خودکار → تشخیص مجدد
+        # بازگشت به خودکار → تشخیص مجدد (پروب واقعی WASAPI گاهی کند است)
         Config(dict(saved.data)).save()
         app.apply_config()
-        self.assertTrue(wait_for(lambda: app.device == 0))
+        self.assertTrue(wait_for(lambda: app.device == 0, timeout=15))
         # فایل تنظیمات را به حالت اول برگردان
         saved.save()
 

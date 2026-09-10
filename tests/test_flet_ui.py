@@ -169,6 +169,39 @@ class TestControlWindow(unittest.TestCase):
                  if isinstance(c, ft.Text) and c.value and c.value.startswith("v")]
         self.assertIn(f"v{APP_VERSION}", texts)
 
+    def test_updates_from_foreign_thread_go_through_event_loop(self):
+        # باگ رگرسیون: page.update از ترد فرعی (هات‌کی/worker ضبط) به
+        # صف ارسال کلاینت نمی‌رسد — ارسال باید با page.run_task روی
+        # ایونت‌لوپ برود (داکیومنت رسمی فلت)
+        import asyncio
+        from flet_ui.control_window import ControlWindow
+
+        class RunTaskPage(MockPage):
+            def __init__(self):
+                super().__init__()
+                self.scheduled = []
+
+            def run_task(self, handler, *args):
+                self.scheduled.append((handler, args))
+
+        page = RunTaskPage()
+        win = ControlWindow(page)
+        win.set_state("idle", "ctrl+k")
+        self.assertEqual(len(page.scheduled), 1, "ارسال باید با run_task برنامه‌ریزی شود")
+        self.assertEqual(page.updates, 0, "از ترد فرعی نباید مستقیم update شود")
+        handler, args = page.scheduled[0]
+        asyncio.run(handler(*args))          # شبیه‌سازی اجرا روی ایونت‌لوپ
+        self.assertEqual(page.updates, 1)
+        self.assertEqual(win.rec_btn.content, "شروع ضبط")
+        self.assertFalse(win.rec_btn.disabled)
+        self.assertEqual(win.status_text.value, "کلید میانبر: ctrl+k")
+        # set_status هم همان مسیر
+        win.set_status("سلام")
+        self.assertEqual(len(page.scheduled), 2)
+        handler, args = page.scheduled[1]
+        asyncio.run(handler(*args))
+        self.assertEqual(win.status_text.value, "سلام")
+
 
 def _walk_all(controls):
     for c in controls:
@@ -477,6 +510,113 @@ class TestThemeHelpers(unittest.TestCase):
         # باگ رگرسیون: Option(متن) فقط key را ست می‌کرد و label خالی می‌ماند
         self.assertEqual([(o.key, o.text) for o in d.options],
                          [("الف", "الف"), ("ب", "ب")])
+
+
+class TestHotkeyCapture(SettingsTestBase):
+    """کپچر کلید میانبر از جریان hook کتابخانه keyboard — قرینه‌ی CTk."""
+
+    def setUp(self):
+        super().setUp()
+        # خودِ hook سراسری (LL hook ویندوز) در تست نصب نمی‌شود —
+        # منطق ساخت ترکیب با رویداد خام تست می‌شود، سیم‌کشی در GUI
+        self.win._hk_hook_on = lambda: None
+        self.win._hk_hook_off = lambda: None
+
+    def _raw(self, name, etype="down"):
+        self.win._hk_raw(SimpleNamespace(name=name, event_type=etype))
+
+    def test_valid_hotkey_cases(self):
+        from flet_ui.settings_window import _valid_hotkey
+        for hk in ("ctrl+shift+space", "ctrl+alt+f5", "f5", "f12", "shift+a"):
+            self.assertTrue(_valid_hotkey(hk), hk)
+        for hk in ("", "ctrl", "a", "ctrl+shift", "x"):
+            self.assertFalse(_valid_hotkey(hk), hk)
+
+    def test_focus_starts_capture_and_blur_stops_it(self):
+        w = self.win
+        w._hk_focus()
+        self.assertTrue(w._hk_capturing)
+        self.assertEqual(w._hk_mods, set())
+        w._hk_blur()
+        self.assertFalse(w._hk_capturing)
+
+    def test_combo_capture(self):
+        w = self.win
+        w._hk_focus()
+        self._raw("left ctrl")
+        self._raw("left alt")
+        self._raw("k")
+        self.assertEqual(w.var_hotkey.value, "ctrl+alt+k")
+        self.assertEqual(w.hk_hint.color, "#9b9b9b")   # FG_DIM — بدون خطا
+        self._raw("left alt", "up")
+        self._raw("left ctrl", "up")
+        self.assertEqual(w._hk_mods, set())
+
+    def test_space_combo(self):
+        w = self.win
+        w._hk_focus()
+        self._raw("left ctrl")
+        self._raw("left shift")
+        self._raw("space")
+        self.assertEqual(w.var_hotkey.value, "ctrl+shift+space")
+
+    def test_escape_cancels_to_previous(self):
+        w = self.win
+        w._hk_focus()
+        self._raw("f9")
+        self.assertEqual(w.var_hotkey.value, "f9")
+        self._raw("esc")
+        self.assertEqual(w.var_hotkey.value, DEFAULTS["hotkey"])
+        self.assertEqual(w.hk_hint.color, "#9b9b9b")
+
+    def test_plain_key_rejected_with_danger_hint(self):
+        w = self.win
+        w._hk_focus()
+        self._raw("a")   # تک‌کلیدی بدون modifier و بدون F
+        self.assertEqual(w.var_hotkey.value, DEFAULTS["hotkey"])
+        self.assertEqual(w.hk_hint.color, "#e5484d")   # DANGER
+
+    def test_modifier_only_press_changes_nothing(self):
+        w = self.win
+        w._hk_focus()
+        self._raw("left shift")
+        self._raw("left shift", "up")
+        self.assertEqual(w.var_hotkey.value, DEFAULTS["hotkey"])
+
+    def test_capture_ignored_after_blur(self):
+        w = self.win
+        w._hk_blur()
+        self._raw("f9")
+        self.assertEqual(w.var_hotkey.value, DEFAULTS["hotkey"])
+
+
+class TestSaveValidation(SettingsTestBase):
+    """اعتبارسنجی پیش از ذخیره — قرینه‌ی save() نسخه CTk."""
+
+    def test_validate_ok_on_defaults(self):
+        self.assertIsNone(self.win._validate(self.win._collect()))
+
+    def test_validate_rejects_bad_hotkey(self):
+        from flet_ui.settings_window import HK_INVALID
+        data = self.win._collect()
+        data["hotkey"] = "hello"
+        self.assertEqual(self.win._validate(data), ("hotkey", HK_INVALID))
+
+    def test_validate_rejects_hotword_boost_without_words(self):
+        data = self.win._collect()
+        data["hotword_boost"] = True
+        data["hotwords"] = []
+        self.assertEqual(self.win._validate(data)[0], "hotwords")
+
+    def test_save_refusal_keeps_window_open_and_writes_nothing(self):
+        # ذخیره‌ی نامعتبر: مثل CTk پنجره باز می‌ماند، دیسک نوشته نمی‌شود
+        import asyncio
+        w = self.win
+        w.var_hotkey.value = "hello"
+        asyncio.run(w._save())
+        self.assertFalse(self.page.window.destroyed, "پنجره نباید بسته شود")
+        self.assertEqual(w.hk_hint.color, "#e5484d")
+        self.assertIsNone(w.result)
 
 
 if __name__ == "__main__":
