@@ -428,6 +428,13 @@ def open_settings(parent_root, app=None):
     ctk.CTkOptionMenu(arow, values=[str(i) for i in range(1, 9)], variable=var_threads,
                       width=80, height=34, **menu_style).pack(side="left")
 
+    cs = card(t_adv, "متن زنده پایدار — آزمایشی")
+    var_stable_live = tk.BooleanVar(value=bool(cfg.get("stable_live")))
+    ctk.CTkSwitch(cs, text="قفل پیشوند با امتیاز اطمینان مدل",
+                  variable=var_stable_live, **switch_style).pack(anchor="e", pady=(0, 6))
+    dim(cs, "متن زنده کمتر نوسان می‌کند؛ خروجی ممکن است کمی با حالت پیش‌فرض متفاوت باشد")
+    dim(cs, "پیش‌فرض خاموش است؛ اگر وسط ضبط تغییرش دهید، بعد از پایان ضبط اعمال می‌شود")
+
     ch_hw = card(t_adv, "واژه‌های حساس (هات‌وورد) — آزمایشی")
     var_hotword = tk.BooleanVar(value=bool(cfg.get("hotword_boost")))
     ctk.CTkSwitch(ch_hw, text="تقویت واژه‌های مشخص هنگام تشخیص",
@@ -497,6 +504,7 @@ def open_settings(parent_root, app=None):
         sample.configure(font=(fam, int(var_font.get())))
         var_auto_stop.set(auto_stop_labels.get(int(data.get("auto_stop_sec") or 0), "خاموش"))
         var_hotword.set(bool(data.get("hotword_boost")))
+        var_stable_live.set(bool(data.get("stable_live")))
         txt_hotwords.delete("1.0", "end")
         txt_hotwords.insert("1.0", "\n".join(str(w) for w in (data.get("hotwords") or [])))
 
@@ -533,6 +541,7 @@ def open_settings(parent_root, app=None):
             return
         cfg.set("hotword_boost", hw_on)
         cfg.set("hotwords", hw_list)
+        cfg.set("stable_live", bool(var_stable_live.get()))
         cfg.save()
         set_autostart(var_autostart.get())
         tester.stop()
