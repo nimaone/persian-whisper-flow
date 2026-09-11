@@ -1,0 +1,40 @@
+{
+  "variants": {
+    "A": {
+      "precision": 0.8229,
+      "recall": 0.1202,
+      "f1": 0.2031,
+      "kinds": {
+        "grow": 10,
+        "shrink": 13,
+        "edit": 5
+      },
+      "n_changes": 28,
+      "mean_words_shown": 18.41
+    },
+    "B": {
+      "precision": 0.8334,
+      "recall": 0.124,
+      "f1": 0.2094,
+      "kinds": {
+        "grow": 10,
+        "shrink": 13,
+        "edit": 1
+      },
+      "n_changes": 24,
+      "mean_words_shown": 19.17
+    },
+    "C": {
+      "precision": 0.8081,
+      "recall": 0.1174,
+      "f1": 0.1977,
+      "kinds": {
+        "grow": 7,
+        "shrink": 15
+      },
+      "n_changes": 22,
+      "mean_words_shown": 17.99
+    }
+  },
+  "raw_changes": 172
+}

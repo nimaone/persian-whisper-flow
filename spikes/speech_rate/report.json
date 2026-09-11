@@ -1,0 +1,2047 @@
+{
+  "audio_duration_s": 142.8,
+  "config": {
+    "win_sec": 10.0,
+    "step_sec": 0.8,
+    "min_word_confidence": 0.25
+  },
+  "reference_words": 277,
+  "reference_text": "با سلام امگی قراره اپلی که چند روز پیش توی یک رشته تویید به شما معرفی کردم ما اینجا تو قالب یک ویدیو بهتون نشون بدم و نحوه کار کردن شما. دیگه ببینید این اپ که اسمشه ایکسار نام داره یه اپ خیرس و جمع و جوره که شبیه اپل ویسستر پلا کار می کنه حالا اگه آخپ ویستپرپلو کار کرده باش. یک سری دکمه میان برد کنتر شیفت اسپس شما می زنیم و این اپ شروع می کند تایپ کردن اون چیزی که شما صوتی می و کار سریع تر و روان تر می کنه مخصوصا با کار کردن کارنسا و حالا هر ابزار کدنویسی که شما در اختیار داشته باشید، نح فکر کارش هم خیلی ساده است. حالا شما من الان اینجا که می بینین داخل اپلیکیشن ضد کد هستم که مان ضد ایAI هست، حالا می خوای من این قابلیت اپلیکیشن دیکتریا رو تست کنید مثلا دکتر دکمه کنترل شیفت اسپس فعال می شه. و حالا اینجا می بینیم که هر چیزی که شما اینجا صحبت کنین و تایپ می مثلا می شه بگی عرض نمی دونم دکمه ذخیره رو کم کن یا زیاد کن و دوباره شما دکمه کنترل شیفت اسپیسس. و قطع یک کم شاید اولش اون چیزی که مدل خروجی داره یک کم ضعیف باشه، حالا مدل مدل اوپین سورسی. بعدش بیین یه سری جاها رو که حالا اشتباه کردن خودتون درست کنید خیلی بهتر از اینه که شما اینو دستتون تای کنین و سرعتش خیلی بیشتر اینجا مخصوصا برای جاهایی به درد می خوروره که میخو خواین یک تغییرات زیادی وارد اپلیکیشن کنی یا تغییرات زیادی رو انجام بدیم و تو این خیلی مناسب ممنون که این ویدیو رو دیدین.",
+  "q1_rate_vs_conf": {
+    "n_windows": 174,
+    "wpm_mean": 118.51724137931035,
+    "wpm_min": 6.0,
+    "wpm_max": 174.0,
+    "conf_mean": 0.8093557471264368,
+    "conf_min": 0.3891,
+    "conf_max": 0.9457,
+    "pearson_wpm_conf": 0.20643648705768283,
+    "pearson_wpm_margin": 0.2363825234417904,
+    "pearson_nwords_conf": 0.206436487057683
+  },
+  "q2_error_analysis": {
+    "word_observations": 3437,
+    "strict_wrong": 828,
+    "lenient_wrong": 461,
+    "strict_wrong_conf_mean": 0.6911189808973656,
+    "correct_conf_mean": 0.8536235525227452,
+    "strict_wrong_margin_mean": 0.5318636102466912,
+    "correct_margin_mean": 0.7694671275247646,
+    "threshold_table_strict": [
+      {
+        "threshold": 0.25,
+        "rejects_errors": 8,
+        "total_errors": 828,
+        "drops_correct": 2,
+        "total_correct": 2609
+      },
+      {
+        "threshold": 0.5,
+        "rejects_errors": 163,
+        "total_errors": 828,
+        "drops_correct": 108,
+        "total_correct": 2609
+      },
+      {
+        "threshold": 0.7,
+        "rejects_errors": 413,
+        "total_errors": 828,
+        "drops_correct": 415,
+        "total_correct": 2609
+      },
+      {
+        "threshold": 0.9,
+        "rejects_errors": 668,
+        "total_errors": 828,
+        "drops_correct": 1210,
+        "total_correct": 2609
+      },
+      {
+        "threshold": 0.96,
+        "rejects_errors": 755,
+        "total_errors": 828,
+        "drops_correct": 1856,
+        "total_correct": 2609
+      }
+    ],
+    "threshold_table_lenient": [
+      {
+        "threshold": 0.25,
+        "rejects_errors": 3,
+        "total_errors": 461,
+        "drops_correct": 7,
+        "total_correct": 2976
+      },
+      {
+        "threshold": 0.5,
+        "rejects_errors": 117,
+        "total_errors": 461,
+        "drops_correct": 154,
+        "total_correct": 2976
+      },
+      {
+        "threshold": 0.7,
+        "rejects_errors": 298,
+        "total_errors": 461,
+        "drops_correct": 530,
+        "total_correct": 2976
+      },
+      {
+        "threshold": 0.9,
+        "rejects_errors": 452,
+        "total_errors": 461,
+        "drops_correct": 1426,
+        "total_correct": 2976
+      },
+      {
+        "threshold": 0.96,
+        "rejects_errors": 461,
+        "total_errors": 461,
+        "drops_correct": 2150,
+        "total_correct": 2976
+      }
+    ],
+    "hi_conf_errors": [
+      {
+        "word": "سلام",
+        "conf": 0.993,
+        "margin": 0.992
+      },
+      {
+        "word": "سلام",
+        "conf": 0.984,
+        "margin": 0.98
+      },
+      {
+        "word": "قراره",
+        "conf": 0.922,
+        "margin": 0.865
+      },
+      {
+        "word": "چند",
+        "conf": 0.994,
+        "margin": 0.993
+      },
+      {
+        "word": "روز",
+        "conf": 0.989,
+        "margin": 0.984
+      },
+      {
+        "word": "قب",
+        "conf": 0.913,
+        "margin": 0.889
+      },
+      {
+        "word": "چند",
+        "conf": 0.995,
+        "margin": 0.994
+      },
+      {
+        "word": "روز",
+        "conf": 0.988,
+        "margin": 0.982
+      },
+      {
+        "word": "پیش",
+        "conf": 0.988,
+        "margin": 0.985
+      },
+      {
+        "word": "چند",
+        "conf": 0.993,
+        "margin": 0.992
+      },
+      {
+        "word": "روز",
+        "conf": 0.988,
+        "margin": 0.984
+      },
+      {
+        "word": "پیش",
+        "conf": 0.986,
+        "margin": 0.984
+      },
+      {
+        "word": "توی",
+        "conf": 0.905,
+        "margin": 0.868
+      },
+      {
+        "word": "رشته",
+        "conf": 0.946,
+        "margin": 0.921
+      },
+      {
+        "word": "توی",
+        "conf": 0.908,
+        "margin": 0.87
+      },
+      {
+        "word": "رشته",
+        "conf": 0.961,
+        "margin": 0.941
+      },
+      {
+        "word": "رشته",
+        "conf": 0.964,
+        "margin": 0.947
+      },
+      {
+        "word": "به",
+        "conf": 0.905,
+        "margin": 0.861
+      },
+      {
+        "word": "با",
+        "conf": 0.902,
+        "margin": 0.825
+      },
+      {
+        "word": "رشته",
+        "conf": 0.976,
+        "margin": 0.968
+      },
+      {
+        "word": "به",
+        "conf": 0.917,
+        "margin": 0.875
+      },
+      {
+        "word": "شما",
+        "conf": 0.943,
+        "margin": 0.93
+      },
+      {
+        "word": "معرفی",
+        "conf": 0.974,
+        "margin": 0.952
+      },
+      {
+        "word": "کردم",
+        "conf": 0.931,
+        "margin": 0.91
+      },
+      {
+        "word": "با",
+        "conf": 0.918,
+        "margin": 0.873
+      },
+      {
+        "word": "معرفی",
+        "conf": 0.989,
+        "margin": 0.984
+      },
+      {
+        "word": "کردم",
+        "conf": 0.911,
+        "margin": 0.877
+      },
+      {
+        "word": "اینجا",
+        "conf": 0.926,
+        "margin": 0.877
+      },
+      {
+        "word": "با",
+        "conf": 0.901,
+        "margin": 0.839
+      },
+      {
+        "word": "اینجا",
+        "conf": 0.923,
+        "margin": 0.873
+      },
+      {
+        "word": "با",
+        "conf": 0.93,
+        "margin": 0.89
+      },
+      {
+        "word": "ویدیو",
+        "conf": 0.937,
+        "margin": 0.897
+      },
+      {
+        "word": "ویدیو",
+        "conf": 0.918,
+        "margin": 0.848
+      },
+      {
+        "word": "نشون",
+        "conf": 0.985,
+        "margin": 0.979
+      },
+      {
+        "word": "با",
+        "conf": 0.928,
+        "margin": 0.892
+      },
+      {
+        "word": "نشون",
+        "conf": 0.991,
+        "margin": 0.985
+      },
+      {
+        "word": "با",
+        "conf": 0.931,
+        "margin": 0.892
+      },
+      {
+        "word": "با",
+        "conf": 0.922,
+        "margin": 0.892
+      },
+      {
+        "word": "این",
+        "conf": 0.986,
+        "margin": 0.979
+      },
+      {
+        "word": "نام",
+        "conf": 0.97,
+        "margin": 0.964
+      }
+    ],
+    "sample_wrong_words": [
+      "همگی",
+      "سر",
+      "طوری",
+      "سلام",
+      "همگی",
+      "سر",
+      "تویوری",
+      "کردم.",
+      "سلام",
+      "همگی",
+      "اپ",
+      "سه",
+      "اینجا.",
+      "همگی",
+      "قراره",
+      "اپلی",
+      "سه",
+      "قراره",
+      "اپلی",
+      "که",
+      "قراره",
+      "اپلی",
+      "که",
+      "چند",
+      "روز",
+      "قب",
+      "ب.",
+      "قراره",
+      "اپلی",
+      "که",
+      "چند",
+      "روز",
+      "پیش",
+      "بهتونونه",
+      "بدم.",
+      "که",
+      "چند",
+      "روز",
+      "پیش",
+      "توی"
+    ]
+  },
+  "q3_lock": {
+    "n_steps": 179,
+    "n_changes": 29,
+    "kinds": {
+      "grow": 10,
+      "shrink": 12,
+      "edit": 6
+    },
+    "changes": [
+      {
+        "t": 0.0,
+        "n_words": 16,
+        "text": "با سلام همگی قراره اپلی که چند روز پیش توی یک سر رشته طوری به شما"
+      },
+      {
+        "t": 0.8,
+        "n_words": 17,
+        "text": "سلام همگی قراره اپلی که چند روز پیش توی یک سر رشته تویوری به شما معرفی کردم."
+      },
+      {
+        "t": 34.4,
+        "n_words": 22,
+        "text": "میان برد گر کنترو شیفت اسپیس شما می زنین و این اپ شروع می کنه تایپ کردن اون چیزی که شما صوتی"
+      },
+      {
+        "t": 36.8,
+        "n_words": 21,
+        "text": "کنتر شیفت اسپیس شما می زنیم و این اپ شروع می کند تایپ کردن اون چیزی که شما صوتی میید و"
+      },
+      {
+        "t": 40.8,
+        "n_words": 17,
+        "text": "تایپ کردن اون چیزی که شما صوتی و خیلی کار سریع تر و روان تر می کنم."
+      },
+      {
+        "t": 41.6,
+        "n_words": 19,
+        "text": "تایپ کردن اون چیزی که شما صوتی امید و خیلی کار سریع تر و روان تر می کنه، مخصوصا"
+      },
+      {
+        "t": 43.2,
+        "n_words": 13,
+        "text": "شما صوتی و خیلی کار سریع تر و روان تر می کنه مخصوصا"
+      },
+      {
+        "t": 44.0,
+        "n_words": 11,
+        "text": "و خیلی کار سریع تر و روان تر می کنه مخصوصا"
+      },
+      {
+        "t": 44.8,
+        "n_words": 14,
+        "text": "و خیلی کار سریع تر و روان تر می کنه مخصوصا با کار کردن"
+      },
+      {
+        "t": 48.8,
+        "n_words": 15,
+        "text": "سریع تر و روان تر می کنه مخصوصا با کار کردن هارنسا و حالا هر"
+      },
+      {
+        "t": 49.6,
+        "n_words": 15,
+        "text": "تر و روان تر می کنه مخصوصا با کار کردن هارنسا و حالا هر ابزار."
+      },
+      {
+        "t": 51.2,
+        "n_words": 15,
+        "text": "با کار کردن هارنسا و حالا هر ابزار کدنویسی که شما در اختیار داشته باشید."
+      },
+      {
+        "t": 52.8,
+        "n_words": 15,
+        "text": "با کار کردن هنسا و حالا هر ابزار کدنویسی که شما در اختیار داشته باشید."
+      },
+      {
+        "t": 56.8,
+        "n_words": 26,
+        "text": "و حالا هر ابزار کدنویسی که شما در اختیار داشته باشین، نحوه کارش هم خیلی ساده است، حالا شما من الان اینجا که می بینین داخ"
+      },
+      {
+        "t": 62.4,
+        "n_words": 23,
+        "text": "کارش هم خیلی ساده است، حالا شما من الان اینجا که می بینین داخل اپلیکیشن ضد کد هستم که مال ضد ایAI هست."
+      },
+      {
+        "t": 66.4,
+        "n_words": 20,
+        "text": "اپلیکیشن ضد کد هستم که مال ضد AI هست، حالا می خوای من این قابلیت اپلیکیشن دیکتریا رو کسب کنید."
+      },
+      {
+        "t": 68.8,
+        "n_words": 26,
+        "text": "اپلیکیشن ضد کد هستم که مان ضد AI هست، حالا می خوای من این قابلیت اپلیکیشن دیکتری ایا را دست کنید مثلا دکتر دکمه کنترل شی"
+      },
+      {
+        "t": 72.0,
+        "n_words": 26,
+        "text": "حالا می خوای من این قابلیت اپلیکیشن دیکتریا رو کسب کنید مثلا دکتر دکمه کنترل شیفت اسپس فعال می شه و حالا اینجا می بینیم "
+      },
+      {
+        "t": 81.6,
+        "n_words": 23,
+        "text": "ببینیم که هر چیزی که شما اینجا صحبت کنین و تایپ می مثلا می شه بگی عض نمی دونم دکمه ذخیره رو کم."
+      },
+      {
+        "t": 83.2,
+        "n_words": 23,
+        "text": "صحبت کنین و تایپ می کن، مثلا می شه بگی عض نمی دونم دکمه ذخیره رو کم کن یا زیاد کن و دوباره"
+      },
+      {
+        "t": 89.6,
+        "n_words": 20,
+        "text": "ذخیره را کم کن یا زیاد کن و دوباره شما دکمه کنترل شیفت اسپس رو می زنید و قطع می."
+      },
+      {
+        "t": 93.6,
+        "n_words": 12,
+        "text": "دکمه کنترل شیفت اسپیس رو می زنیم و قطع یک کم شاید"
+      },
+      {
+        "t": 96.0,
+        "n_words": 10,
+        "text": "و قطع می یک کم شاید اولش اون چیزی که"
+      },
+      {
+        "t": 96.8,
+        "n_words": 9,
+        "text": "قطع می یک کم شاید اولش اون چیزی که"
+      },
+      {
+        "t": 99.2,
+        "n_words": 13,
+        "text": "یک کم شاید اولش اون چیزی که مدل خروجی داره یک کم ضعیف."
+      },
+      {
+        "t": 100.0,
+        "n_words": 14,
+        "text": "یک کم شاید اولش اون چیزی که مدل خروجی داره یک کم ضعیف باشه."
+      },
+      {
+        "t": 104.8,
+        "n_words": 21,
+        "text": "اون چیزی که مدل خروجی داره یک کم ضعیف باشه، حالا مدل مدلای اوپن سورسیه شما حالا می تونین بعدش بیاین."
+      },
+      {
+        "t": 126.4,
+        "n_words": 16,
+        "text": "یک تغییرات زیادی وارد اپلیکیشن کنی یا تغییرات زیادی رو انجام بدیم و تو این خیلی"
+      },
+      {
+        "t": 128.0,
+        "n_words": 16,
+        "text": "تغییرات زیادی وارد اپلیکیشن کنی یا تغییرات زیادی رو انجام بدیم و تو این خیلی مناسب."
+      }
+    ],
+    "raw_changes_without_lock": 172
+  },
+  "q4_rate_vs_error": {
+    "pearson_wpm_errrate": -0.04954819220488415,
+    "top_wpm_windows": [
+      {
+        "t": 109.6,
+        "wpm": 174.0,
+        "n_err": 8,
+        "n_words": 29,
+        "err_rate": 0.27586206896551724
+      },
+      {
+        "t": 114.4,
+        "wpm": 174.0,
+        "n_err": 5,
+        "n_words": 29,
+        "err_rate": 0.1724137931034483
+      },
+      {
+        "t": 116.0,
+        "wpm": 174.0,
+        "n_err": 5,
+        "n_words": 29,
+        "err_rate": 0.1724137931034483
+      },
+      {
+        "t": 116.8,
+        "wpm": 174.0,
+        "n_err": 6,
+        "n_words": 29,
+        "err_rate": 0.20689655172413793
+      },
+      {
+        "t": 115.2,
+        "wpm": 168.0,
+        "n_err": 6,
+        "n_words": 28,
+        "err_rate": 0.21428571428571427
+      },
+      {
+        "t": 77.6,
+        "wpm": 162.0,
+        "n_err": 5,
+        "n_words": 27,
+        "err_rate": 0.18518518518518517
+      },
+      {
+        "t": 7.2,
+        "wpm": 156.0,
+        "n_err": 9,
+        "n_words": 26,
+        "err_rate": 0.34615384615384615
+      },
+      {
+        "t": 56.0,
+        "wpm": 156.0,
+        "n_err": 8,
+        "n_words": 26,
+        "err_rate": 0.3076923076923077
+      },
+      {
+        "t": 56.8,
+        "wpm": 156.0,
+        "n_err": 8,
+        "n_words": 26,
+        "err_rate": 0.3076923076923077
+      },
+      {
+        "t": 57.6,
+        "wpm": 156.0,
+        "n_err": 5,
+        "n_words": 26,
+        "err_rate": 0.19230769230769232
+      }
+    ],
+    "low_wpm_windows": [
+      {
+        "t": 138.4,
+        "wpm": 6.0,
+        "n_err": 1,
+        "n_words": 1,
+        "err_rate": 1.0
+      },
+      {
+        "t": 137.6,
+        "wpm": 30.0,
+        "n_err": 1,
+        "n_words": 5,
+        "err_rate": 0.2
+      },
+      {
+        "t": 135.2,
+        "wpm": 42.0,
+        "n_err": 1,
+        "n_words": 7,
+        "err_rate": 0.14285714285714285
+      },
+      {
+        "t": 136.0,
+        "wpm": 42.0,
+        "n_err": 2,
+        "n_words": 7,
+        "err_rate": 0.2857142857142857
+      },
+      {
+        "t": 136.8,
+        "wpm": 42.0,
+        "n_err": 1,
+        "n_words": 7,
+        "err_rate": 0.14285714285714285
+      },
+      {
+        "t": 96.8,
+        "wpm": 54.0,
+        "n_err": 1,
+        "n_words": 9,
+        "err_rate": 0.1111111111111111
+      },
+      {
+        "t": 97.6,
+        "wpm": 54.0,
+        "n_err": 4,
+        "n_words": 9,
+        "err_rate": 0.4444444444444444
+      },
+      {
+        "t": 134.4,
+        "wpm": 54.0,
+        "n_err": 1,
+        "n_words": 9,
+        "err_rate": 0.1111111111111111
+      },
+      {
+        "t": 96.0,
+        "wpm": 60.0,
+        "n_err": 1,
+        "n_words": 10,
+        "err_rate": 0.1
+      },
+      {
+        "t": 98.4,
+        "wpm": 60.0,
+        "n_err": 3,
+        "n_words": 10,
+        "err_rate": 0.3
+      }
+    ]
+  },
+  "windows": [
+    {
+      "t": 0.0,
+      "n_words": 16,
+      "wpm": 96.0,
+      "confidence": 0.7265,
+      "margin": 0.6176,
+      "decode_s": 0.392
+    },
+    {
+      "t": 0.8,
+      "n_words": 17,
+      "wpm": 102.0,
+      "confidence": 0.7887,
+      "margin": 0.6888,
+      "decode_s": 0.303
+    },
+    {
+      "t": 1.6,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.7498,
+      "margin": 0.6332,
+      "decode_s": 0.303
+    },
+    {
+      "t": 2.4,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.784,
+      "margin": 0.6776,
+      "decode_s": 0.287
+    },
+    {
+      "t": 3.2,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.8064,
+      "margin": 0.7217,
+      "decode_s": 0.338
+    },
+    {
+      "t": 4.0,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8259,
+      "margin": 0.7432,
+      "decode_s": 0.298
+    },
+    {
+      "t": 4.8,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.8008,
+      "margin": 0.7005,
+      "decode_s": 0.303
+    },
+    {
+      "t": 5.6,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8586,
+      "margin": 0.7901,
+      "decode_s": 0.307
+    },
+    {
+      "t": 6.4,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.8011,
+      "margin": 0.7007,
+      "decode_s": 0.3
+    },
+    {
+      "t": 7.2,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8476,
+      "margin": 0.7646,
+      "decode_s": 0.325
+    },
+    {
+      "t": 8.0,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8432,
+      "margin": 0.7539,
+      "decode_s": 0.296
+    },
+    {
+      "t": 8.8,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.8372,
+      "margin": 0.7432,
+      "decode_s": 0.306
+    },
+    {
+      "t": 9.6,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.817,
+      "margin": 0.716,
+      "decode_s": 0.328
+    },
+    {
+      "t": 10.4,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.7806,
+      "margin": 0.6651,
+      "decode_s": 0.313
+    },
+    {
+      "t": 11.2,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.7767,
+      "margin": 0.67,
+      "decode_s": 0.275
+    },
+    {
+      "t": 12.0,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.7744,
+      "margin": 0.6646,
+      "decode_s": 0.316
+    },
+    {
+      "t": 12.8,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.7675,
+      "margin": 0.6563,
+      "decode_s": 0.33
+    },
+    {
+      "t": 13.6,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.7273,
+      "margin": 0.5949,
+      "decode_s": 0.304
+    },
+    {
+      "t": 14.4,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.6927,
+      "margin": 0.5367,
+      "decode_s": 0.322
+    },
+    {
+      "t": 15.2,
+      "n_words": 15,
+      "wpm": 90.0,
+      "confidence": 0.7213,
+      "margin": 0.5713,
+      "decode_s": 0.302
+    },
+    {
+      "t": 16.0,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.6835,
+      "margin": 0.543,
+      "decode_s": 0.314
+    },
+    {
+      "t": 16.8,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.7661,
+      "margin": 0.6606,
+      "decode_s": 0.332
+    },
+    {
+      "t": 17.6,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.7501,
+      "margin": 0.6083,
+      "decode_s": 0.309
+    },
+    {
+      "t": 18.4,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.694,
+      "margin": 0.5286,
+      "decode_s": 0.345
+    },
+    {
+      "t": 19.2,
+      "n_words": 16,
+      "wpm": 96.0,
+      "confidence": 0.7579,
+      "margin": 0.637,
+      "decode_s": 0.297
+    },
+    {
+      "t": 20.0,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.7867,
+      "margin": 0.6588,
+      "decode_s": 0.308
+    },
+    {
+      "t": 20.8,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.7848,
+      "margin": 0.6448,
+      "decode_s": 0.326
+    },
+    {
+      "t": 21.6,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.7709,
+      "margin": 0.6368,
+      "decode_s": 0.317
+    },
+    {
+      "t": 22.4,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.7832,
+      "margin": 0.6563,
+      "decode_s": 0.331
+    },
+    {
+      "t": 23.2,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.779,
+      "margin": 0.6494,
+      "decode_s": 0.281
+    },
+    {
+      "t": 24.0,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.799,
+      "margin": 0.6792,
+      "decode_s": 0.301
+    },
+    {
+      "t": 24.8,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.7888,
+      "margin": 0.6686,
+      "decode_s": 0.393
+    },
+    {
+      "t": 25.6,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.7619,
+      "margin": 0.6217,
+      "decode_s": 0.362
+    },
+    {
+      "t": 26.4,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.7306,
+      "margin": 0.6,
+      "decode_s": 0.362
+    },
+    {
+      "t": 27.2,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.7057,
+      "margin": 0.5702,
+      "decode_s": 0.359
+    },
+    {
+      "t": 28.0,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.6569,
+      "margin": 0.4845,
+      "decode_s": 0.322
+    },
+    {
+      "t": 28.8,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.7116,
+      "margin": 0.564,
+      "decode_s": 0.349
+    },
+    {
+      "t": 29.6,
+      "n_words": 17,
+      "wpm": 102.0,
+      "confidence": 0.7251,
+      "margin": 0.5719,
+      "decode_s": 0.324
+    },
+    {
+      "t": 30.4,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.7222,
+      "margin": 0.5622,
+      "decode_s": 0.359
+    },
+    {
+      "t": 31.2,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8097,
+      "margin": 0.6925,
+      "decode_s": 0.367
+    },
+    {
+      "t": 32.0,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.7838,
+      "margin": 0.6488,
+      "decode_s": 0.35
+    },
+    {
+      "t": 32.8,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.7619,
+      "margin": 0.6129,
+      "decode_s": 0.313
+    },
+    {
+      "t": 33.6,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.7854,
+      "margin": 0.6589,
+      "decode_s": 0.299
+    },
+    {
+      "t": 34.4,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.8161,
+      "margin": 0.7151,
+      "decode_s": 0.329
+    },
+    {
+      "t": 35.2,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8272,
+      "margin": 0.718,
+      "decode_s": 0.387
+    },
+    {
+      "t": 36.0,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.7996,
+      "margin": 0.6809,
+      "decode_s": 0.351
+    },
+    {
+      "t": 36.8,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8394,
+      "margin": 0.7367,
+      "decode_s": 0.319
+    },
+    {
+      "t": 37.6,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.8613,
+      "margin": 0.7814,
+      "decode_s": 0.312
+    },
+    {
+      "t": 38.4,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.8134,
+      "margin": 0.6972,
+      "decode_s": 0.285
+    },
+    {
+      "t": 39.2,
+      "n_words": 16,
+      "wpm": 96.0,
+      "confidence": 0.8137,
+      "margin": 0.7057,
+      "decode_s": 0.335
+    },
+    {
+      "t": 40.0,
+      "n_words": 17,
+      "wpm": 102.0,
+      "confidence": 0.8734,
+      "margin": 0.7872,
+      "decode_s": 0.365
+    },
+    {
+      "t": 40.8,
+      "n_words": 17,
+      "wpm": 102.0,
+      "confidence": 0.871,
+      "margin": 0.7735,
+      "decode_s": 0.365
+    },
+    {
+      "t": 41.6,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.9045,
+      "margin": 0.8262,
+      "decode_s": 0.325
+    },
+    {
+      "t": 42.4,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.9127,
+      "margin": 0.843,
+      "decode_s": 0.325
+    },
+    {
+      "t": 43.2,
+      "n_words": 13,
+      "wpm": 78.0,
+      "confidence": 0.9457,
+      "margin": 0.9011,
+      "decode_s": 0.329
+    },
+    {
+      "t": 44.0,
+      "n_words": 11,
+      "wpm": 66.0,
+      "confidence": 0.9266,
+      "margin": 0.869,
+      "decode_s": 0.356
+    },
+    {
+      "t": 44.8,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.8853,
+      "margin": 0.7955,
+      "decode_s": 0.36
+    },
+    {
+      "t": 45.6,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.9027,
+      "margin": 0.824,
+      "decode_s": 0.361
+    },
+    {
+      "t": 46.4,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.8956,
+      "margin": 0.8028,
+      "decode_s": 0.294
+    },
+    {
+      "t": 47.2,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.8735,
+      "margin": 0.7713,
+      "decode_s": 0.307
+    },
+    {
+      "t": 48.0,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.8251,
+      "margin": 0.7153,
+      "decode_s": 0.336
+    },
+    {
+      "t": 48.8,
+      "n_words": 15,
+      "wpm": 90.0,
+      "confidence": 0.8729,
+      "margin": 0.7932,
+      "decode_s": 0.335
+    },
+    {
+      "t": 49.6,
+      "n_words": 15,
+      "wpm": 90.0,
+      "confidence": 0.7996,
+      "margin": 0.6737,
+      "decode_s": 0.361
+    },
+    {
+      "t": 50.4,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.7878,
+      "margin": 0.6719,
+      "decode_s": 0.375
+    },
+    {
+      "t": 51.2,
+      "n_words": 15,
+      "wpm": 90.0,
+      "confidence": 0.8755,
+      "margin": 0.7966,
+      "decode_s": 0.297
+    },
+    {
+      "t": 52.0,
+      "n_words": 15,
+      "wpm": 90.0,
+      "confidence": 0.8676,
+      "margin": 0.7908,
+      "decode_s": 0.316
+    },
+    {
+      "t": 52.8,
+      "n_words": 15,
+      "wpm": 90.0,
+      "confidence": 0.8833,
+      "margin": 0.8077,
+      "decode_s": 0.329
+    },
+    {
+      "t": 53.6,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.8328,
+      "margin": 0.7336,
+      "decode_s": 0.335
+    },
+    {
+      "t": 54.4,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.8226,
+      "margin": 0.7246,
+      "decode_s": 0.353
+    },
+    {
+      "t": 55.2,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.7923,
+      "margin": 0.6757,
+      "decode_s": 0.364
+    },
+    {
+      "t": 56.0,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.816,
+      "margin": 0.7118,
+      "decode_s": 0.301
+    },
+    {
+      "t": 56.8,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8717,
+      "margin": 0.7926,
+      "decode_s": 0.323
+    },
+    {
+      "t": 57.6,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8734,
+      "margin": 0.8052,
+      "decode_s": 0.327
+    },
+    {
+      "t": 58.4,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.8487,
+      "margin": 0.7674,
+      "decode_s": 0.337
+    },
+    {
+      "t": 59.2,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.8093,
+      "margin": 0.7117,
+      "decode_s": 0.356
+    },
+    {
+      "t": 60.0,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.8108,
+      "margin": 0.7021,
+      "decode_s": 0.36
+    },
+    {
+      "t": 60.8,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.799,
+      "margin": 0.6928,
+      "decode_s": 0.301
+    },
+    {
+      "t": 61.6,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.7657,
+      "margin": 0.6478,
+      "decode_s": 0.329
+    },
+    {
+      "t": 62.4,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.8021,
+      "margin": 0.7012,
+      "decode_s": 0.355
+    },
+    {
+      "t": 63.2,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.7078,
+      "margin": 0.5762,
+      "decode_s": 0.378
+    },
+    {
+      "t": 64.0,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.7734,
+      "margin": 0.6489,
+      "decode_s": 0.353
+    },
+    {
+      "t": 64.8,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.762,
+      "margin": 0.6386,
+      "decode_s": 0.351
+    },
+    {
+      "t": 65.6,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.7576,
+      "margin": 0.6278,
+      "decode_s": 0.321
+    },
+    {
+      "t": 66.4,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.7848,
+      "margin": 0.6713,
+      "decode_s": 0.324
+    },
+    {
+      "t": 67.2,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.7455,
+      "margin": 0.623,
+      "decode_s": 0.36
+    },
+    {
+      "t": 68.0,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.7371,
+      "margin": 0.6112,
+      "decode_s": 0.375
+    },
+    {
+      "t": 68.8,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.7365,
+      "margin": 0.6137,
+      "decode_s": 0.357
+    },
+    {
+      "t": 69.6,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.7629,
+      "margin": 0.6525,
+      "decode_s": 0.353
+    },
+    {
+      "t": 70.4,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.7527,
+      "margin": 0.6286,
+      "decode_s": 0.337
+    },
+    {
+      "t": 71.2,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8241,
+      "margin": 0.731,
+      "decode_s": 0.319
+    },
+    {
+      "t": 72.0,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8175,
+      "margin": 0.7119,
+      "decode_s": 0.349
+    },
+    {
+      "t": 72.8,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.848,
+      "margin": 0.7531,
+      "decode_s": 0.367
+    },
+    {
+      "t": 73.6,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8556,
+      "margin": 0.7768,
+      "decode_s": 0.364
+    },
+    {
+      "t": 74.4,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8502,
+      "margin": 0.7735,
+      "decode_s": 0.315
+    },
+    {
+      "t": 75.2,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8712,
+      "margin": 0.8008,
+      "decode_s": 0.349
+    },
+    {
+      "t": 76.0,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8469,
+      "margin": 0.77,
+      "decode_s": 0.342
+    },
+    {
+      "t": 76.8,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8445,
+      "margin": 0.7569,
+      "decode_s": 0.331
+    },
+    {
+      "t": 77.6,
+      "n_words": 27,
+      "wpm": 162.0,
+      "confidence": 0.8514,
+      "margin": 0.7719,
+      "decode_s": 0.355
+    },
+    {
+      "t": 78.4,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8057,
+      "margin": 0.7009,
+      "decode_s": 0.391
+    },
+    {
+      "t": 79.2,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8104,
+      "margin": 0.7107,
+      "decode_s": 0.352
+    },
+    {
+      "t": 80.0,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8703,
+      "margin": 0.806,
+      "decode_s": 0.347
+    },
+    {
+      "t": 80.8,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.8472,
+      "margin": 0.7537,
+      "decode_s": 0.333
+    },
+    {
+      "t": 81.6,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.8574,
+      "margin": 0.7757,
+      "decode_s": 0.428
+    },
+    {
+      "t": 82.4,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8441,
+      "margin": 0.7474,
+      "decode_s": 0.446
+    },
+    {
+      "t": 83.2,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.868,
+      "margin": 0.7843,
+      "decode_s": 0.433
+    },
+    {
+      "t": 84.0,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.8919,
+      "margin": 0.8294,
+      "decode_s": 0.417
+    },
+    {
+      "t": 84.8,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8586,
+      "margin": 0.7727,
+      "decode_s": 0.4
+    },
+    {
+      "t": 85.6,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.8487,
+      "margin": 0.7653,
+      "decode_s": 0.432
+    },
+    {
+      "t": 86.4,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8223,
+      "margin": 0.7217,
+      "decode_s": 0.45
+    },
+    {
+      "t": 87.2,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.8537,
+      "margin": 0.7541,
+      "decode_s": 0.433
+    },
+    {
+      "t": 88.0,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.827,
+      "margin": 0.705,
+      "decode_s": 0.406
+    },
+    {
+      "t": 88.8,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8013,
+      "margin": 0.6695,
+      "decode_s": 0.34
+    },
+    {
+      "t": 89.6,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.83,
+      "margin": 0.7298,
+      "decode_s": 0.372
+    },
+    {
+      "t": 90.4,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.8334,
+      "margin": 0.728,
+      "decode_s": 0.365
+    },
+    {
+      "t": 91.2,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.8187,
+      "margin": 0.7185,
+      "decode_s": 0.324
+    },
+    {
+      "t": 92.0,
+      "n_words": 13,
+      "wpm": 78.0,
+      "confidence": 0.7438,
+      "margin": 0.5863,
+      "decode_s": 0.304
+    },
+    {
+      "t": 92.8,
+      "n_words": 15,
+      "wpm": 90.0,
+      "confidence": 0.7282,
+      "margin": 0.5728,
+      "decode_s": 0.322
+    },
+    {
+      "t": 93.6,
+      "n_words": 12,
+      "wpm": 72.0,
+      "confidence": 0.7414,
+      "margin": 0.5939,
+      "decode_s": 0.342
+    },
+    {
+      "t": 94.4,
+      "n_words": 12,
+      "wpm": 72.0,
+      "confidence": 0.7796,
+      "margin": 0.6678,
+      "decode_s": 0.366
+    },
+    {
+      "t": 95.2,
+      "n_words": 12,
+      "wpm": 72.0,
+      "confidence": 0.7463,
+      "margin": 0.5971,
+      "decode_s": 0.381
+    },
+    {
+      "t": 96.0,
+      "n_words": 10,
+      "wpm": 60.0,
+      "confidence": 0.8297,
+      "margin": 0.7088,
+      "decode_s": 0.314
+    },
+    {
+      "t": 96.8,
+      "n_words": 9,
+      "wpm": 54.0,
+      "confidence": 0.8039,
+      "margin": 0.6572,
+      "decode_s": 0.297
+    },
+    {
+      "t": 97.6,
+      "n_words": 9,
+      "wpm": 54.0,
+      "confidence": 0.8109,
+      "margin": 0.67,
+      "decode_s": 0.35
+    },
+    {
+      "t": 98.4,
+      "n_words": 10,
+      "wpm": 60.0,
+      "confidence": 0.8585,
+      "margin": 0.7443,
+      "decode_s": 0.363
+    },
+    {
+      "t": 99.2,
+      "n_words": 13,
+      "wpm": 78.0,
+      "confidence": 0.8208,
+      "margin": 0.7141,
+      "decode_s": 0.34
+    },
+    {
+      "t": 100.0,
+      "n_words": 14,
+      "wpm": 84.0,
+      "confidence": 0.8723,
+      "margin": 0.7729,
+      "decode_s": 0.55
+    },
+    {
+      "t": 100.8,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.84,
+      "margin": 0.7207,
+      "decode_s": 0.386
+    },
+    {
+      "t": 101.6,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.8026,
+      "margin": 0.6934,
+      "decode_s": 0.409
+    },
+    {
+      "t": 102.4,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.7974,
+      "margin": 0.683,
+      "decode_s": 0.446
+    },
+    {
+      "t": 103.2,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.8042,
+      "margin": 0.6914,
+      "decode_s": 0.445
+    },
+    {
+      "t": 104.0,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8058,
+      "margin": 0.6937,
+      "decode_s": 0.409
+    },
+    {
+      "t": 104.8,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8208,
+      "margin": 0.7251,
+      "decode_s": 0.386
+    },
+    {
+      "t": 105.6,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.8003,
+      "margin": 0.6901,
+      "decode_s": 0.424
+    },
+    {
+      "t": 106.4,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.7954,
+      "margin": 0.6836,
+      "decode_s": 0.451
+    },
+    {
+      "t": 107.2,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.7809,
+      "margin": 0.6529,
+      "decode_s": 0.364
+    },
+    {
+      "t": 108.0,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.7482,
+      "margin": 0.6238,
+      "decode_s": 0.322
+    },
+    {
+      "t": 108.8,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.7318,
+      "margin": 0.6025,
+      "decode_s": 0.318
+    },
+    {
+      "t": 109.6,
+      "n_words": 29,
+      "wpm": 174.0,
+      "confidence": 0.7882,
+      "margin": 0.6798,
+      "decode_s": 0.328
+    },
+    {
+      "t": 110.4,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.7965,
+      "margin": 0.6938,
+      "decode_s": 0.355
+    },
+    {
+      "t": 111.2,
+      "n_words": 25,
+      "wpm": 150.0,
+      "confidence": 0.8346,
+      "margin": 0.7398,
+      "decode_s": 0.373
+    },
+    {
+      "t": 112.0,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.8389,
+      "margin": 0.7573,
+      "decode_s": 0.346
+    },
+    {
+      "t": 112.8,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.8494,
+      "margin": 0.7501,
+      "decode_s": 0.341
+    },
+    {
+      "t": 113.6,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8561,
+      "margin": 0.7648,
+      "decode_s": 0.331
+    },
+    {
+      "t": 114.4,
+      "n_words": 29,
+      "wpm": 174.0,
+      "confidence": 0.8661,
+      "margin": 0.7905,
+      "decode_s": 0.313
+    },
+    {
+      "t": 115.2,
+      "n_words": 28,
+      "wpm": 168.0,
+      "confidence": 0.871,
+      "margin": 0.7956,
+      "decode_s": 0.342
+    },
+    {
+      "t": 116.0,
+      "n_words": 29,
+      "wpm": 174.0,
+      "confidence": 0.818,
+      "margin": 0.7101,
+      "decode_s": 0.415
+    },
+    {
+      "t": 116.8,
+      "n_words": 29,
+      "wpm": 174.0,
+      "confidence": 0.8205,
+      "margin": 0.7156,
+      "decode_s": 0.432
+    },
+    {
+      "t": 117.6,
+      "n_words": 26,
+      "wpm": 156.0,
+      "confidence": 0.8447,
+      "margin": 0.7462,
+      "decode_s": 0.414
+    },
+    {
+      "t": 118.4,
+      "n_words": 24,
+      "wpm": 144.0,
+      "confidence": 0.8462,
+      "margin": 0.7537,
+      "decode_s": 0.428
+    },
+    {
+      "t": 119.2,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8516,
+      "margin": 0.7593,
+      "decode_s": 0.435
+    },
+    {
+      "t": 120.0,
+      "n_words": 19,
+      "wpm": 114.0,
+      "confidence": 0.8347,
+      "margin": 0.7263,
+      "decode_s": 0.45
+    },
+    {
+      "t": 120.8,
+      "n_words": 23,
+      "wpm": 138.0,
+      "confidence": 0.8281,
+      "margin": 0.7306,
+      "decode_s": 0.441
+    },
+    {
+      "t": 121.6,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.8583,
+      "margin": 0.7676,
+      "decode_s": 0.411
+    },
+    {
+      "t": 122.4,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.8425,
+      "margin": 0.7544,
+      "decode_s": 0.421
+    },
+    {
+      "t": 123.2,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8365,
+      "margin": 0.7389,
+      "decode_s": 0.452
+    },
+    {
+      "t": 124.0,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.8665,
+      "margin": 0.8006,
+      "decode_s": 0.452
+    },
+    {
+      "t": 124.8,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8658,
+      "margin": 0.776,
+      "decode_s": 0.384
+    },
+    {
+      "t": 125.6,
+      "n_words": 22,
+      "wpm": 132.0,
+      "confidence": 0.8127,
+      "margin": 0.6988,
+      "decode_s": 0.333
+    },
+    {
+      "t": 126.4,
+      "n_words": 16,
+      "wpm": 96.0,
+      "confidence": 0.8834,
+      "margin": 0.8301,
+      "decode_s": 0.322
+    },
+    {
+      "t": 127.2,
+      "n_words": 17,
+      "wpm": 102.0,
+      "confidence": 0.8409,
+      "margin": 0.7544,
+      "decode_s": 0.355
+    },
+    {
+      "t": 128.0,
+      "n_words": 16,
+      "wpm": 96.0,
+      "confidence": 0.8811,
+      "margin": 0.8162,
+      "decode_s": 0.358
+    },
+    {
+      "t": 128.8,
+      "n_words": 18,
+      "wpm": 108.0,
+      "confidence": 0.8657,
+      "margin": 0.8002,
+      "decode_s": 0.347
+    },
+    {
+      "t": 129.6,
+      "n_words": 21,
+      "wpm": 126.0,
+      "confidence": 0.8676,
+      "margin": 0.7998,
+      "decode_s": 0.32
+    },
+    {
+      "t": 130.4,
+      "n_words": 20,
+      "wpm": 120.0,
+      "confidence": 0.845,
+      "margin": 0.7586,
+      "decode_s": 0.303
+    },
+    {
+      "t": 131.2,
+      "n_words": 17,
+      "wpm": 102.0,
+      "confidence": 0.8369,
+      "margin": 0.7477,
+      "decode_s": 0.32
+    },
+    {
+      "t": 132.0,
+      "n_words": 16,
+      "wpm": 96.0,
+      "confidence": 0.8187,
+      "margin": 0.7148,
+      "decode_s": 0.37
+    },
+    {
+      "t": 132.8,
+      "n_words": 12,
+      "wpm": 72.0,
+      "confidence": 0.7978,
+      "margin": 0.6983,
+      "decode_s": 0.394
+    },
+    {
+      "t": 133.6,
+      "n_words": 10,
+      "wpm": 60.0,
+      "confidence": 0.8191,
+      "margin": 0.7112,
+      "decode_s": 0.481
+    },
+    {
+      "t": 134.4,
+      "n_words": 9,
+      "wpm": 54.0,
+      "confidence": 0.7859,
+      "margin": 0.6622,
+      "decode_s": 0.413
+    },
+    {
+      "t": 135.2,
+      "n_words": 7,
+      "wpm": 42.0,
+      "confidence": 0.7308,
+      "margin": 0.5916,
+      "decode_s": 0.367
+    },
+    {
+      "t": 136.0,
+      "n_words": 7,
+      "wpm": 42.0,
+      "confidence": 0.749,
+      "margin": 0.6311,
+      "decode_s": 0.371
+    },
+    {
+      "t": 136.8,
+      "n_words": 7,
+      "wpm": 42.0,
+      "confidence": 0.8014,
+      "margin": 0.6791,
+      "decode_s": 0.301
+    },
+    {
+      "t": 137.6,
+      "n_words": 5,
+      "wpm": 30.0,
+      "confidence": 0.8634,
+      "margin": 0.7812,
+      "decode_s": 0.267
+    },
+    {
+      "t": 138.4,
+      "n_words": 1,
+      "wpm": 6.0,
+      "confidence": 0.3891,
+      "margin": 0.1779,
+      "decode_s": 0.237
+    }
+  ]
+}

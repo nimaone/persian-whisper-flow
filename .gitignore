@@ -29,3 +29,7 @@ build/
 dist/
 *.spec
 installer/Output/
+
+# کش‌های پنجره و صدای آزمایش‌های قوانین قفل (بازتولید با experiment*.py)
+spikes/speech_rate/*.pkl
+sample/

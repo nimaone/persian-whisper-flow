@@ -1,0 +1,16 @@
+{
+  "baseline_rules_off": {
+    "rules_on": false,
+    "precision": 0.2176,
+    "recall": 0.0585,
+    "changes": 324,
+    "empty_steps": 0
+  },
+  "new_rules_on": {
+    "rules_on": true,
+    "precision": 0.2096,
+    "recall": 0.0544,
+    "changes": 265,
+    "empty_steps": 69
+  }
+}
