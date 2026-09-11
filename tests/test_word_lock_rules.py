@@ -196,3 +196,76 @@ def test_words_without_timing_keep_old_behavior():
     assert live.partial_result(buf(10.8)).text == "سلام دنیا"
     # سوپاپ hysteresis همان رفتار قبلی را دارد: متن پایدار می‌آید
     assert live.partial_result(buf(11.6)).text == "سلام دنیا جدید"
+
+
+def test_zwnj_variant_continuation_accepted():
+    """واژه با/بدون نیم‌فاصله در تطبیق قفل یکی است؛ ادامه پذیرفته می‌شود.
+
+    «می‌ریم» (با ZWNJ) قفل شده؛ پنجره‌ی بعد «میریم دنیا» (بدون ZWNJ)
+    می‌دهد. بدون نرمال‌سازی این replace حساب می‌شد و رد؛ با کلید
+    نرمال، ادامه است و واژه‌ی تازه می‌آید. متن نمایش هم خروجی خود
+    مدل می‌ماند (ZWNJ پنجره‌ی اول تا جایگزینی حفظ می‌شود).
+    """
+    e = ListEngine([
+        timed_hyp([("سلام", 5), ("می‌ریم", 30)], confidence=0.95),
+        timed_hyp([("سلام", 5), ("میریم", 30), ("دنیا", 60)],
+                  confidence=0.99),
+    ])
+    live = LiveTranscriber(e, window_sec=WIN_SEC, stable_live=True,
+                           vote_high_conf=0.95)
+    first = live.partial_result(buf(10.0))
+    assert first.text == "سلام می‌ریم"
+    assert "\u200c" in first.text  # متن نمایش دست‌نخورده
+    second = live.partial_result(buf(10.8))
+    assert second.text == "سلام میریم دنیا", (
+        "تفاوت نیم‌فاصله نباید ادامه‌ی متن را رد کند")
+
+
+def test_zwnj_variant_identical_text_no_flicker():
+    """تفاوت فقط-نیم‌فاصله «تغییر متن» حساب نمی‌شود تا نمایش نلرزد.
+
+    پنجره‌ی بعد همان متن را بدون ZWNJ می‌دهد → نمایش قبلی (با ZWNJ)
+    باقی می‌ماند؛ نه بازنگری، نه لرزش بین دو شکل یک واژه.
+    """
+    e = ListEngine([
+        timed_hyp([("سلام", 5), ("می‌ریم", 30)], confidence=0.95),
+        timed_hyp([("سلام", 5), ("میریم", 30)], confidence=0.95),
+        timed_hyp([("سلام", 5), ("می‌ریم", 30)], confidence=0.95),
+    ])
+    live = LiveTranscriber(e, window_sec=WIN_SEC, stable_live=True,
+                           vote_high_conf=0.95)
+    first = live.partial_result(buf(10.0))
+    assert first.text == "سلام می‌ریم"
+    second = live.partial_result(buf(10.8))
+    assert second.text == "سلام می‌ریم"
+    third = live.partial_result(buf(11.6))
+    assert third.text == "سلام می‌ریم"
+
+
+def test_zwnj_variant_memory_votes():
+    """رأی حافظه بین شکل‌های با/بدون نیم‌فاصله‌ی یک واژه مشترک است."""
+    from app.asr import _WordMemory
+    mem = _WordMemory()
+    mem.record(0.0, [AsrWord("می‌ریم", 0.9, 0.6, start=10, end=20)], 10.0)
+    # همان بازه‌ی مطلق، بدون ZWNJ → باید رأی بگیرد
+    assert mem.count_votes("میریم", 0.8, 1.6) == 1
+    assert mem.contest("میریم", 0.8, 1.6) == 0.0
+    # رقیب واقعی (متن متفاوت) همچنان رقیب است
+    mem.record(0.8, [AsrWord("می ریم", 0.7, 0.5, start=0, end=20)], 10.8)
+    # «می ریم» دو واژه است — اینجا به‌صورت یک توکن ساختگی ثبت شد؛
+    # کلیدش با «میریم» برابر نیست → رقیب حساب می‌شود
+    assert mem.contest("میریم", 0.8, 1.6) > 0.0
+
+
+def test_zwnj_variant_shift_detected():
+    """جابه‌جایی پنجره با واریانت نیم‌فاصله‌دار هم تشخیص داده می‌شود."""
+    old = [AsrWord("سلام", 0.9, 0.6), AsrWord("می‌ریم", 0.9, 0.6),
+           AsrWord("دنیا", 0.9, 0.6)]
+    new = [AsrWord("میریم", 0.9, 0.6), AsrWord("دنیا", 0.9, 0.6),
+           AsrWord("خوب", 0.9, 0.6)]
+    # بدون نرمال‌سازی تطبیق دقیق شکست می‌خورد و shift=None می‌شد
+    assert LiveTranscriber._shift_prefix_len(old, new) == 1
+    # و واریانت با ZWNJ هم ولی همچنان تطبیق ندارد (متن واقعاً متفاوت)
+    new2 = [AsrWord("می‌خوابم", 0.9, 0.6), AsrWord("دنیا", 0.9, 0.6),
+            AsrWord("خوب", 0.9, 0.6)]
+    assert LiveTranscriber._shift_prefix_len(old, new2) is None

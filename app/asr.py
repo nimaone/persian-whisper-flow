@@ -15,6 +15,19 @@ from pathlib import Path
 import numpy as np
 import sherpa_onnx
 
+_ZWNJ = "\u200c"  # نیم‌فاصله — مدل در پنجره‌های متوالی گاهی همان واژه را
+                  # با و گاهی بدون آن می‌گوید و تطبیق دقیق را می‌شکند
+
+
+def _cmp_key(text: str) -> str:
+    """کلید مقایسه‌ی واژه برای تطبیق‌های قفل پیشوند — نیم‌فاصله ندارد.
+
+    همه‌ی مقایسه‌های واژه‌ای قفل (ادامه، جابه‌جایی، بازنگری، رأی/رقیب)
+    روی این کلید انجام می‌شود تا تفاوت ZWNJ بین پنجره‌ها باعث بازنگری
+    نمایش نشود؛ متنِ نمایش خودِ خروجی مدل می‌ماند و دست‌نخورده است.
+    """
+    return text.replace(_ZWNJ, "")
+
 
 @dataclass(frozen=True)
 class AsrWord:
@@ -367,8 +380,9 @@ class SpeechGate:
 class _WordMemory:
     """حافظه‌ی واژه‌های پنجره‌های قبلی — برای سیگنال رأی (votes) و رقیب (contest).
 
-    هر مشاهده: (متن، بازه‌ی زمانی مطلق از شروع ضبط). هم‌ارزی دو مشاهده
-    یعنی هم‌متن بودن + هم‌پوشانی زمانی ≥ ۳۰٪ِ بازه‌ی کوتاه‌تر.
+    هر مشاهده: (کلید متن نرمال‌شده بدون نیم‌فاصله، بازه‌ی زمانی مطلق از
+    شروع ضبط). هم‌ارزی دو مشاهده یعنی هم‌متن بودن + هم‌پوشانی زمانی
+    ≥ ۳۰٪ِ بازه‌ی کوتاه‌تر.
     `MS_PER_MODEL_FRAME` = 80ms؛ زمان مطلق = زمان شروع پنجره + فریم×80ms.
     پنجره‌ی جاری باید *بعد از* تصمیم‌گیری قفل ثبت شود تا رأی فقط از
     پنجره‌های قبلی بیاید — وگرنه هر واژه‌ای رأی خودش را می‌گرفت.
@@ -398,30 +412,39 @@ class _WordMemory:
                 continue
             t0 = t_start + w.start * self.MS_PER_MODEL_FRAME
             t1 = t_start + (w.end or w.start + 1) * self.MS_PER_MODEL_FRAME
-            self.observations.append((w.text, t0, t1))
+            self.observations.append((_cmp_key(w.text), t0, t1))
 
     @staticmethod
     def _overlap(a0, a1, b0, b1) -> float:
         return min(a1, b1) - max(a0, b0)
 
     def count_votes(self, text: str, t0: float, t1: float) -> int:
-        """مشاهده‌های هم‌متنِ هم‌زمان — رأی «این واژه واقعی است»."""
+        """مشاهده‌های هم‌متنِ هم‌زمان — رأی «این واژه واقعی است».
+
+        مقایسه روی کلید نرمال‌شده است؛ واژه با و بدون نیم‌فاصله رأی
+        همدیگر را می‌گیرند.
+        """
+        key = _cmp_key(text)
         n = 0
         for wtext, wt0, wt1 in self.observations:
-            if wtext != text:
+            if wtext != key:
                 continue
             if self._overlap(t0, t1, wt0, wt1) > 0.3 * min(t1 - t0, wt1 - wt0):
                 n += 1
         return n
 
     def contest(self, text: str, t0: float, t1: float) -> float:
-        """سهم رأی رقیب‌های هم‌زمان با متن متفاوت — بالا یعنی جا بحث است."""
+        """سهم رأی رقیب‌های هم‌زمان با متن متفاوت — بالا یعنی جا بحث است.
+
+        مقایسه روی کلید نرمال‌شده است؛ تفاوت نیم‌فاصله رقیب حساب نمی‌شود.
+        """
+        key = _cmp_key(text)
         own = 0
         rival = 0
         for wtext, wt0, wt1 in self.observations:
             if self._overlap(t0, t1, wt0, wt1) <= 0.3 * min(t1 - t0, wt1 - wt0):
                 continue
-            if wtext == text:
+            if wtext == key:
                 own += 1
             else:
                 rival += 1
@@ -505,12 +528,17 @@ class LiveTranscriber:
 
     @staticmethod
     def _shift_prefix_len(old: list[AsrWord], new: list[AsrWord]) -> int | None:
-        """اگر پنجره‌ی صدا جلو رفته باشد، چند واژه از ابتدا افتاده است؟"""
+        """اگر پنجره‌ی صدا جلو رفته باشد، چند واژه از ابتدا افتاده است؟
+
+        تطبیق روی کلید نرمال‌شده (بدون نیم‌فاصله) انجام می‌شود.
+        """
+        old_keys = [_cmp_key(w.text) for w in old]
+        new_keys = [_cmp_key(w.text) for w in new]
         for shift in range(1, len(old) + 1):
             overlap = min(len(old) - shift, len(new))
             if overlap <= 0:
                 continue
-            if [w.text for w in new[:overlap]] == [w.text for w in old[shift:shift + overlap]]:
+            if new_keys[:overlap] == old_keys[shift:shift + overlap]:
                 return shift
         return None
 
@@ -565,21 +593,26 @@ class LiveTranscriber:
         t_start: float = 0.0,
         buf_end: float = 0.0,
     ) -> bool:
-        """آیا فرضیه‌ی جدید می‌تواند جایگزین متن نمایش‌داده‌شده شود؟"""
+        """آیا فرضیه‌ی جدید می‌تواند جایگزین متن نمایش‌داده‌شده شود؟
+
+        همه‌ی تطبیق‌های واژه‌ای روی کلید نرمال‌شده (بدون نیم‌فاصله)
+        انجام می‌شود؛ متن نمایش خروجی مدل می‌ماند.
+        """
         cur_words = self._words(current)
         new_words = self._words(candidate)
+        cur_keys = [_cmp_key(w.text) for w in cur_words]
+        new_keys = [_cmp_key(w.text) for w in new_words]
 
         # پنجره دیگر به متن نمایش‌داده‌شده نمی‌رسد (displayed قدیمی‌تر از
         # پنجره است — مثلاً بعد از سکوت طولانی). نگه‌داشتن متن کهنه یعنی
         # فریز تا ابد؛ بازراه‌اندازی با پنجره‌ی جاری درست است.
-        m0 = SequenceMatcher(None, [w.text for w in cur_words],
-                             [w.text for w in new_words], autojunk=False)
+        m0 = SequenceMatcher(None, cur_keys, new_keys, autojunk=False)
         if sum(b.size for b in m0.get_matching_blocks()) == 0:
             return True  # هیچ هم‌پوشانی — بازراه‌اندازی
 
         # ادامه‌ی متن قبلی: چون پیشوند پایدار است، فقط دنباله اضافه می‌شود.
         if len(new_words) >= len(cur_words) and all(
-            n.text == c.text for n, c in zip(new_words, cur_words)
+            nk == ck for nk, ck in zip(new_keys, cur_keys)
         ):
             if len(new_words) == len(cur_words):
                 return True
@@ -617,10 +650,7 @@ class LiveTranscriber:
 
         # با هم‌ترازسازی واژه‌ها فقط تغییرهای واقعی را می‌سنجم؛ حذف ابتدای
         # متن به‌خاطر حرکت پنجره و درج دنباله‌ی جدید خطای نوسان نیست.
-        matcher = SequenceMatcher(
-            None, [w.text for w in cur_words], [w.text for w in new_words],
-            autojunk=False,
-        )
+        matcher = SequenceMatcher(None, cur_keys, new_keys, autojunk=False)
         matched = sum(block.size for block in matcher.get_matching_blocks())
         overlap = matched / max(1, min(len(cur_words), len(new_words)))
         if overlap < 0.65 or candidate.confidence < current.confidence - 0.10:
@@ -696,7 +726,10 @@ class LiveTranscriber:
 
         current = self._displayed
         # متن تکراری نباید با hypothesis بدون confidence جایگزین شود.
-        if current is not None and result.text == current.text:
+        # مقایسه روی کلید نرمال‌شده: تفاوت نیم‌فاصله متن را «تغییر» حساب
+        # نمی‌کند تا نمایش بین دو شکل یک واژه نلرزد.
+        if current is not None \
+                and _cmp_key(result.text) == _cmp_key(current.text):
             self._candidate = None
             self._candidate_count = 0
             # حافظه با پنجره‌ی تکراری هم به‌روز می‌شود (رأی/رقیب پنجره‌ها)
@@ -772,7 +805,8 @@ class LiveTranscriber:
         cur_words = self._words(current)
         new_words = self._words(candidate)
         if len(new_words) >= len(cur_words) and all(
-            n.text == c.text for n, c in zip(new_words, cur_words)
+            _cmp_key(n.text) == _cmp_key(c.text)
+            for n, c in zip(new_words, cur_words)
         ):
             tail = new_words[len(cur_words):]
             return all(self._word_lockable(w, t_start, buf_end) for w in tail)
