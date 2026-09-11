@@ -17,6 +17,7 @@ DEFAULTS = {
     "paste_method": "clipboard",  # clipboard | type
     "voice_commands": True,
     "persian_itn": True,         # تبدیل اعداد حروفی به رقم («بیست و سه» → ۲۳)
+    "rejoin_prefixes": True,     # چسباندن «می/نمیِ» تنها به واژه بعدی («می کنم» → «میکنم»)
     "input_device": None,  # None = تشخیص خودکار
     "autostart": False,
     "overlay_enabled": True,

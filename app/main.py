@@ -21,7 +21,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from app import paths, persian_itn, voice_commands
-from app import first_run
+from app import fa_post, first_run
 from app.asr import DirectCtcAsrEngine, LiveTranscriber, SpeechGate, load_engine
 from app.config import APP_TITLE, Config, model_dir, set_autostart
 from app.control_window import ControlWindow
@@ -326,6 +326,8 @@ class App:
                         text = self.live.partial(buf)
                         if self.cfg.get("persian_itn"):
                             text = persian_itn.normalize_text(text, min_tokens=2)
+                        if self.cfg.get("rejoin_prefixes"):
+                            text = fa_post.rejoin_prefixes(text)
                         self.ui_q.put(("text", text))
                     # توقف خودکار پس از سکوت — فقط اگر قبلاً صدایی شنیده شده
                     if auto_stop > 0:
@@ -374,6 +376,8 @@ class App:
     def _insert(self, text: str):
         if self.cfg.get("persian_itn"):
             text = persian_itn.normalize_text(text, min_tokens=2)
+        if self.cfg.get("rejoin_prefixes"):
+            text = fa_post.rejoin_prefixes(text)
         method = self.cfg.get("paste_method")
         restore = bool(self.cfg.get("restore_clipboard"))
         if self.cfg.get("voice_commands"):
