@@ -1,0 +1,457 @@
+{
+  "pairs_total": 7906,
+  "n_ref_words_with_data": 751,
+  "determinism_buckets": {
+    "<50% (بی‌ثبات)": 115,
+    "۵۰-۸۰%": 115,
+    "≥80% یک شکل": 170
+  },
+  "top_examples": [
+    {
+      "correct": "این",
+      "n": 167,
+      "variants": 79,
+      "top_share": 0.07,
+      "top_variants": [
+        "می(11)",
+        "کار(10)",
+        "لایوان(9)"
+      ]
+    },
+    {
+      "correct": "میکنم",
+      "n": 132,
+      "variants": 6,
+      "top_share": 0.73,
+      "top_variants": [
+        "می(96)",
+        "کنم(32)",
+        "یه(1)"
+      ]
+    },
+    {
+      "correct": "که",
+      "n": 110,
+      "variants": 55,
+      "top_share": 0.13,
+      "top_variants": [
+        "رو(14)",
+        "ببین(7)",
+        "می(6)"
+      ]
+    },
+    {
+      "correct": "به",
+      "n": 105,
+      "variants": 63,
+      "top_share": 0.09,
+      "top_variants": [
+        "گم(9)",
+        "بهول(7)",
+        "جوری(6)"
+      ]
+    },
+    {
+      "correct": "میشه",
+      "n": 95,
+      "variants": 7,
+      "top_share": 0.75,
+      "top_variants": [
+        "می(71)",
+        "شه(11)",
+        "تر(6)"
+      ]
+    },
+    {
+      "correct": "میکنن",
+      "n": 92,
+      "variants": 9,
+      "top_share": 0.82,
+      "top_variants": [
+        "می(75)",
+        "کنن(10)",
+        "انگار(1)"
+      ]
+    },
+    {
+      "correct": "میکنه",
+      "n": 76,
+      "variants": 15,
+      "top_share": 0.78,
+      "top_variants": [
+        "می(59)",
+        "کن(2)",
+        "ام(2)"
+      ]
+    },
+    {
+      "correct": "میده",
+      "n": 75,
+      "variants": 4,
+      "top_share": 0.91,
+      "top_variants": [
+        "می(68)",
+        "ده(5)",
+        "داره(1)"
+      ]
+    },
+    {
+      "correct": "یه",
+      "n": 74,
+      "variants": 46,
+      "top_share": 0.09,
+      "top_variants": [
+        "یا(7)",
+        "دم(5)",
+        "یک(5)"
+      ]
+    },
+    {
+      "correct": "اینکه",
+      "n": 71,
+      "variants": 16,
+      "top_share": 0.44,
+      "top_variants": [
+        "این(31)",
+        "که(12)",
+        "می(8)"
+      ]
+    },
+    {
+      "correct": "اینو",
+      "n": 68,
+      "variants": 19,
+      "top_share": 0.44,
+      "top_variants": [
+        "اینا(30)",
+        "این(8)",
+        "اینه(7)"
+      ]
+    },
+    {
+      "correct": "نمیدونم",
+      "n": 65,
+      "variants": 8,
+      "top_share": 0.71,
+      "top_variants": [
+        "نمی(46)",
+        "دونم(6)",
+        "گه(5)"
+      ]
+    },
+    {
+      "correct": "میگم",
+      "n": 65,
+      "variants": 10,
+      "top_share": 0.71,
+      "top_variants": [
+        "می(46)",
+        "میم(10)",
+        "نه(2)"
+      ]
+    },
+    {
+      "correct": "ایآی",
+      "n": 64,
+      "variants": 14,
+      "top_share": 0.28,
+      "top_variants": [
+        "ایI(18)",
+        "ایAI(12)",
+        "ای(8)"
+      ]
+    },
+    {
+      "correct": "میدم",
+      "n": 60,
+      "variants": 3,
+      "top_share": 0.9,
+      "top_variants": [
+        "می(54)",
+        "دن(5)",
+        "ده(1)"
+      ]
+    },
+    {
+      "correct": "اینا",
+      "n": 58,
+      "variants": 24,
+      "top_share": 0.28,
+      "top_variants": [
+        "این(16)",
+        "خواهانه(7)",
+        "بینم(5)"
+      ]
+    },
+    {
+      "correct": "میخوام",
+      "n": 55,
+      "variants": 9,
+      "top_share": 0.47,
+      "top_variants": [
+        "می(26)",
+        "میام(22)",
+        "انتق(1)"
+      ]
+    },
+    {
+      "correct": "من",
+      "n": 51,
+      "variants": 30,
+      "top_share": 0.14,
+      "top_variants": [
+        "منم(7)",
+        "مثلا(4)",
+        "های(4)"
+      ]
+    },
+    {
+      "correct": "میگه",
+      "n": 51,
+      "variants": 5,
+      "top_share": 0.75,
+      "top_variants": [
+        "می(38)",
+        "رو(7)",
+        "گم(4)"
+      ]
+    },
+    {
+      "correct": "رو",
+      "n": 50,
+      "variants": 35,
+      "top_share": 0.08,
+      "top_variants": [
+        "را(4)",
+        "می(4)",
+        "کمپانی(4)"
+      ]
+    },
+    {
+      "correct": "معروف",
+      "n": 49,
+      "variants": 23,
+      "top_share": 0.16,
+      "top_variants": [
+        "من(8)",
+        "می(7)",
+        "معرو(7)"
+      ]
+    },
+    {
+      "correct": "مثلا",
+      "n": 47,
+      "variants": 33,
+      "top_share": 0.17,
+      "top_variants": [
+        "اصلا(8)",
+        "می(4)",
+        "نمی(2)"
+      ]
+    },
+    {
+      "correct": "داره",
+      "n": 42,
+      "variants": 18,
+      "top_share": 0.17,
+      "top_variants": [
+        "رنگ(7)",
+        "می(7)",
+        "در(5)"
+      ]
+    },
+    {
+      "correct": "برای",
+      "n": 42,
+      "variants": 18,
+      "top_share": 0.29,
+      "top_variants": [
+        "براش(12)",
+        "می(4)",
+        "بر(3)"
+      ]
+    },
+    {
+      "correct": "کلاد",
+      "n": 42,
+      "variants": 8,
+      "top_share": 0.4,
+      "top_variants": [
+        "کلاب(17)",
+        "کل(11)",
+        "کلا(3)"
+      ]
+    },
+    {
+      "correct": "میتونین",
+      "n": 39,
+      "variants": 13,
+      "top_share": 0.36,
+      "top_variants": [
+        "می(14)",
+        "که(6)",
+        "تو(5)"
+      ]
+    },
+    {
+      "correct": "بعد",
+      "n": 38,
+      "variants": 17,
+      "top_share": 0.24,
+      "top_variants": [
+        "عقب(9)",
+        "باد(4)",
+        "کنم(3)"
+      ]
+    },
+    {
+      "correct": "کنین",
+      "n": 37,
+      "variants": 6,
+      "top_share": 0.65,
+      "top_variants": [
+        "کنیم(24)",
+        "کنید(6)",
+        "کنیدین(3)"
+      ]
+    },
+    {
+      "correct": "خب",
+      "n": 33,
+      "variants": 25,
+      "top_share": 0.18,
+      "top_variants": [
+        "می(6)",
+        "منم(2)",
+        "که(2)"
+      ]
+    },
+    {
+      "correct": "میشن",
+      "n": 32,
+      "variants": 2,
+      "top_share": 0.94,
+      "top_variants": [
+        "می(30)",
+        "شه(2)"
+      ]
+    },
+    {
+      "correct": "قول",
+      "n": 31,
+      "variants": 21,
+      "top_share": 0.26,
+      "top_variants": [
+        "حال(8)",
+        "من(3)",
+        "کلات(2)"
+      ]
+    },
+    {
+      "correct": "میدین",
+      "n": 31,
+      "variants": 5,
+      "top_share": 0.45,
+      "top_variants": [
+        "می(14)",
+        "میین(11)",
+        "دن(4)"
+      ]
+    },
+    {
+      "correct": "میخواین",
+      "n": 31,
+      "variants": 6,
+      "top_share": 0.84,
+      "top_variants": [
+        "می(26)",
+        "حال(1)",
+        "سوال(1)"
+      ]
+    },
+    {
+      "correct": "راجع",
+      "n": 30,
+      "variants": 21,
+      "top_share": 0.13,
+      "top_variants": [
+        "راج(4)",
+        "دم(4)",
+        "بعد(2)"
+      ]
+    },
+    {
+      "correct": "حالا",
+      "n": 30,
+      "variants": 19,
+      "top_share": 0.17,
+      "top_variants": [
+        "از(5)",
+        "رمضان(4)",
+        "حالاون(3)"
+      ]
+    },
+    {
+      "correct": "تو",
+      "n": 30,
+      "variants": 10,
+      "top_share": 0.43,
+      "top_variants": [
+        "توی(13)",
+        "رن(5)",
+        "ها(3)"
+      ]
+    },
+    {
+      "correct": "اگه",
+      "n": 29,
+      "variants": 7,
+      "top_share": 0.34,
+      "top_variants": [
+        "از(10)",
+        "اگرد(7)",
+        "اگر(4)"
+      ]
+    },
+    {
+      "correct": "دیتا",
+      "n": 29,
+      "variants": 16,
+      "top_share": 0.24,
+      "top_variants": [
+        "دیت(7)",
+        "دیتتا(3)",
+        "دونم(3)"
+      ]
+    },
+    {
+      "correct": "میگن",
+      "n": 29,
+      "variants": 4,
+      "top_share": 0.83,
+      "top_variants": [
+        "می(24)",
+        "مین(3)",
+        "نه(1)"
+      ]
+    },
+    {
+      "correct": "میکنیم",
+      "n": 29,
+      "variants": 3,
+      "top_share": 0.76,
+      "top_variants": [
+        "می(22)",
+        "کنیم(6)",
+        "چون(1)"
+      ]
+    }
+  ],
+  "leave_split": {
+    "n_eval": 4147,
+    "fixed": 87,
+    "ambiguous": 561,
+    "unfixable": 3499,
+    "map_size": 297
+  }
+}
