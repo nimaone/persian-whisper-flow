@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from app import recorder
-from app.recorder import detect_best_device, input_quality
+from app.recorder import dedupe_input_devices, detect_best_device, input_quality
 
 
 # ---------- input_quality ----------
@@ -39,7 +39,51 @@ def test_quality_warn_in_between():
     assert level in ("good", "warn")
 
 
-# ---------- detect_best_device با sd شبیه‌سازی‌شده ----------
+# ---------- dedupe_input_devices ----------
+
+def test_dedupe_collapses_same_mic_across_host_apis():
+    entries = [
+        {"index": 1, "name": "Microphone Array (Realtek High Definition Audio)",
+         "rate": 44100, "api": "MME"},
+        {"index": 7, "name": "Microphone Array (Realtek High Definition Audio)",
+         "rate": 44100, "api": "Windows DirectSound"},
+        {"index": 15, "name": "Microphone Array (Realtek High Definition Audio)",
+         "rate": 48000, "api": "Windows WASAPI"},
+        {"index": 18, "name": "Microphone Array (Realtek HD Audio Mic input)",
+         "rate": 44100, "api": "Windows WDM-KS"},
+    ]
+    out = dedupe_input_devices(entries)
+    assert len(out) == 1
+    assert out[0]["index"] == 15          # WASAPI برنده‌ی نمایندگی
+    assert out[0]["api"] == "Windows WASAPI"
+
+
+def test_dedupe_drops_system_aliases_and_keeps_distinct_mics():
+    entries = [
+        {"index": 0, "name": "Microsoft Sound Mapper - Input", "rate": 44100,
+         "api": "MME"},
+        {"index": 6, "name": "Primary Sound Capture Driver", "rate": 44100,
+         "api": "Windows DirectSound"},
+        {"index": 1, "name": "Microphone Array (Realtek High Definition Audio)",
+         "rate": 44100, "api": "MME"},
+        {"index": 2, "name": "Microphone (Iriun Webcam)", "rate": 44100,
+         "api": "MME"},
+        {"index": 14, "name": "Microphone (Iriun Webcam)", "rate": 48000,
+         "api": "Windows WASAPI"},
+    ]
+    out = dedupe_input_devices(entries)
+    names = sorted(d["name"] for d in out)
+    assert names == ["Microphone (Iriun Webcam)",
+                     "Microphone Array (Realtek High Definition Audio)"]
+    iriun = [d for d in out if "Iriun" in d["name"]][0]
+    assert iriun["index"] == 14           # نماینده = WASAPI
+
+
+def test_dedupe_keeps_device_only_present_in_low_api():
+    entries = [{"index": 5, "name": "Virtual Cable Audio", "rate": 44100,
+                "api": "MME"}]
+    out = dedupe_input_devices(entries)
+    assert len(out) == 1 and out[0]["index"] == 5
 
 class _FakeStream:
     """استریم فیک — دستگاه شکسته/داده‌ی خراب را شبیه‌سازی می‌کند."""

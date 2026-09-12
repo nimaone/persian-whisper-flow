@@ -15,7 +15,7 @@ import numpy as np
 
 from app import theme, smooth_ctk
 from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config, set_autostart
-from app.recorder import Recorder, detect_best_device
+from app.recorder import Recorder, dedupe_input_devices, detect_best_device
 from app.win32 import style_toplevel, smooth_show, disable_min_max
 from app.theme import apply_icon
 
@@ -245,10 +245,25 @@ def open_settings(parent_root, app=None):
     import sounddevice as sd
 
     cm = card(t_mic, "دستگاه ورودی")
-    devices = []
+    # یک مدخل برای هر میکروفون فیزیکی — ویندوز هر دستگاه را به ازای هر
+    # Host API یک بار فهرست می‌کند (۳ میکروفون → ۱۵+ مدخل پرتکرار)
+    all_inputs = []
     for i, d in enumerate(sd.query_devices()):
         if d["max_input_channels"] > 0:
-            devices.append((i, f"[{i}] {d['name']}"))
+            all_inputs.append({"index": i, "name": d["name"],
+                               "rate": int(d["default_samplerate"]),
+                               "api": sd.query_hostapis(d["hostapi"])["name"]})
+    devices = [(d["index"], f"[{d['index']}] {d['name']} — {d['api']}")
+               for d in dedupe_input_devices(all_inputs)]
+    # اگر دستگاه پین‌شده‌ی فعلی در فهرست یکدست نیامد (API کم‌ترجیح)، برای
+    # دیده‌شدن انتخاب فعلی اضافه شود
+    cur_pin = cfg.get("input_device")
+    if cur_pin is not None and cur_pin not in (idx for idx, _ in devices):
+        for e in all_inputs:
+            if e["index"] == cur_pin:
+                devices.append((e["index"],
+                                f"[{e['index']}] {e['name']} — {e['api']}"))
+                break
 
     auto_label = "خودکار (پرسیگنال‌ترین)"
     cur = cfg.get("input_device")

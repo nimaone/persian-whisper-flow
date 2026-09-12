@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import threading
 import time
+from difflib import SequenceMatcher
 
 import numpy as np
 import sounddevice as sd
@@ -190,6 +191,44 @@ def list_input_devices() -> list[dict]:
         if d["max_input_channels"] > 0:
             out.append({"index": i, "name": d["name"], "rate": int(d["default_samplerate"])})
     return out
+
+
+# ترجیح Host API برای نماینده‌ی هر میکروفون فیزیکی — WASAPI استاندارد
+# ویندوز است؛ WDM-KS پس‌انداز (روی برخی سیستم‌ها ناپایدار)، MME و
+# DirectSound قدیمی‌اند (نویز پایه بالاتر).
+HOSTAPI_PREFERENCE = ("Windows WASAPI", "Windows WDM-KS",
+                      "Windows DirectSound", "MME")
+
+
+def dedupe_input_devices(entries: list[dict]) -> list[dict]:
+    """یک مدخل برای هر میکروفون فیزیکی از میان ورودی‌های همه‌ی Host APIها.
+
+    ویندوز هر دستگاه را به ازای هر API یک بار فهرست می‌کند (۳ میکروفون
+    فیزیکی → ۱۵+ مدخل). گروه‌بندی با شباهت نام نرمال‌شده (نام دستگاه‌ها
+    بین APIها کمی فرق می‌کند) و نماینده‌ی هر گروه = API با اولویت بالاتر.
+    نام‌های مستعار سیستم («Sound Mapper»، «Primary Sound Capture») حذف
+    می‌شوند — همان دستگاه پیش‌فرض‌اند، نه میکروفون جدا.
+    """
+    def api_rank(api: str) -> int:
+        return HOSTAPI_PREFERENCE.index(api) if api in HOSTAPI_PREFERENCE \
+            else len(HOSTAPI_PREFERENCE)
+
+    def name_key(name: str) -> str:
+        return "".join(ch for ch in name.lower() if ch.isalnum())
+
+    kept: list[dict] = []
+    for e in sorted(entries, key=lambda e: api_rank(e.get("api", ""))):
+        nk = name_key(e["name"])
+        if "soundmapper" in nk or "primarysoundcapture" in nk:
+            continue
+        group = None
+        for k in kept:
+            if SequenceMatcher(None, nk, k["_norm"]).ratio() >= 0.6:
+                group = k
+                break
+        if group is None:
+            kept.append({**e, "_norm": nk})
+    return [{k: v for k, v in e.items() if not k.startswith("_")} for e in kept]
 
 
 def probe_device_level(device: int, seconds: float = 0.35) -> tuple[float, bool]:
