@@ -540,7 +540,23 @@ def open_settings(parent_root, app=None):
         heard_forms: list[str] = [str(v) for v in (entry or {}).get("variants", [])]
         var_checks: dict[str, tk.BooleanVar] = {}
         check_frame = ctk.CTkFrame(body, fg_color="transparent")
-        check_frame.pack(fill="x", pady=(2, 6))
+        check_frame.pack(fill="x", pady=(2, 0))
+        # افزودن دستی واریانت — شکل شنیده‌شده را که در متن زنده دیدی،
+        # بدون ضبط مجدد همین‌جا تایپ کن؛ شنیدنِ مدل در دیکته با ضبطِ
+        # تنها فرق می‌کند و دقیق‌ترین منبع واریانت همان متن زنده است
+        manual_row = ctk.CTkFrame(body, fg_color="transparent")
+        manual_row.pack(fill="x", pady=(0, 6))
+        var_manual = tk.StringVar()
+        ctk.CTkEntry(manual_row, textvariable=var_manual, font=(fam, 13),
+                     height=32, corner_radius=6, fg_color=theme.SURFACE_2,
+                     border_color=theme.BORDER,
+                     text_color=theme.FG).pack(side="right", fill="x",
+                                               expand=True, padx=(6, 0))
+        ctk.CTkButton(manual_row, text="+ افزودن دستی", width=110, height=30,
+                      corner_radius=6, font=(fam, 12),
+                      fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3,
+                      text_color=theme.FG,
+                      command=lambda: add_manual_variant()).pack(side="left")
         slots: list[dict] = []               # per-slot: rec/samples/timer
         status_lbls: list[ctk.CTkLabel] = []
         rec_btns: list[ctk.CTkButton] = []
@@ -560,12 +576,21 @@ def open_settings(parent_root, app=None):
                     continue
                 var_checks[v] = tk.BooleanVar(value=True)
             if not heard_forms:
-                dim(check_frame, "هنوز ضبطی انجام نشده")
+                dim(check_frame, "هنوز واریانتی نیست — ضبط کن یا دستی اضافه کن")
                 return
             dim(check_frame, "شکل‌های شنیده‌شده — هر کدام را تأیید می‌کنی در خروجی جای واژه‌ی درست می‌نشیند:")
             for v, var in var_checks.items():
                 ctk.CTkCheckBox(check_frame, text=f"«{v}»", variable=var,
                                 **check_style).pack(anchor="e", pady=1)
+
+        def add_manual_variant():
+            v = var_manual.get().strip()
+            if len(v) < 2:
+                return
+            if v not in heard_forms:
+                heard_forms.append(v)
+            var_manual.set("")
+            rebuild_checks()
 
         def _decode_worker(slot: int, data, word: str):
             # هیچ دسترسی Tk اینجا ممنوع — word و data از ترد اصلی آمده‌اند

@@ -183,6 +183,36 @@ def main():
         _collect_checks(dlg2)
         print("چک‌باکس واریانت‌های موجود:", len(checks),
               "| همه تیک‌خورده:", all(c.get() for c in checks))
+
+        # --- افزودن دستی واریانت ---
+        entries2 = []
+
+        def _collect_entries(w):
+            for c in w.winfo_children():
+                if isinstance(c, ctk.CTkEntry):
+                    entries2.append(c)
+                _collect_entries(c)
+
+        _collect_entries(dlg2)
+        manual_entry = entries2[1] if len(entries2) > 1 else None
+        print("ورودی افزودن دستی:", manual_entry is not None)
+        manual_entry.insert(0, "تست دستی")
+        mbtn = find_widget(dlg2, ctk.CTkButton, "افزودن دستی")
+        mbtn.invoke()
+        for _ in range(10):
+            root.update()
+            time.sleep(0.03)
+        checks.clear()
+        _collect_checks(dlg2)
+        texts = []
+        for c in checks:
+            try:
+                texts.append(c.cget("text"))
+            except Exception:
+                pass
+        print("چک‌باکس‌ها بعد از افزودن دستی:", len(checks), texts)
+        print("واریانت دستی تیک‌خورده:", "تست دستی" in " ".join(texts)
+              and all(c.get() for c in checks))
         dlg2.destroy()
         win.destroy()
         root.destroy()
