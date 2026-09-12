@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 import tkinter as tk
 
 import customtkinter as ctk
@@ -15,7 +16,7 @@ import numpy as np
 
 from app import theme, smooth_ctk
 from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config, set_autostart
-from app.recorder import detect_best_device
+from app.recorder import Recorder, detect_best_device
 from app.win32 import style_toplevel, smooth_show, disable_min_max
 from app.theme import apply_icon
 
@@ -546,23 +547,16 @@ def open_settings(parent_root, app=None):
                 ctk.CTkCheckBox(check_frame, text=f"«{v}»", variable=var,
                                 **check_style).pack(anchor="e", pady=1)
 
-        def _record_worker(slot: int):
-            import sounddevice as sd
+        def _record_worker(slot: int, dev):
             try:
-                dev = selected_device()
-                if dev is None and app is not None:
-                    dev = app.device
-                if dev is None:
-                    dev = sd.default.device[0]
-                sr = int(sd.query_devices(dev, "input")["default_samplerate"])
-                rec = sd.rec(int(REC_SEC * sr), samplerate=sr, channels=1,
-                             dtype="float32", device=dev)
-                sd.wait()
-                data = rec[:, 0].astype(np.float32)
-                if sr != 16000:
-                    n = int(len(data) * 16000 / sr)
-                    data = np.interp(np.linspace(0, len(data), n, endpoint=False),
-                                     np.arange(len(data)), data).astype(np.float32)
+                # همان مسیر ضبط دیکته — Recorder با دستگاه حل‌شده‌ی اپ؛
+                # sd.rec/detect_best_device اینجا نه (probe چندثانیه‌ای و
+                # دستگاه‌هایی که در sd.rec داده‌ی خراب می‌دهند)
+                rec = Recorder(device=dev, block_ms=50)
+                rec.start()
+                time.sleep(REC_SEC)
+                rec.stop()
+                data = rec.get_buffer_16k()
                 text = str(app.engine.transcribe(data, 16000) or "")
                 variants = enroll_mod.harvest_variants(
                     app.engine, data, var_word.get(), text=text)
@@ -579,7 +573,13 @@ def open_settings(parent_root, app=None):
             busy["slot"] = slot
             rec_btns[slot].configure(state="disabled")
             status_lbls[slot].configure(text="در حال ضبط…", text_color=theme.WARN)
-            threading.Thread(target=_record_worker, args=(slot,), daemon=True).start()
+            # دستگاه باید در ترد اصلی حل شود — خواندن کمبوی CTk از ترد
+            # کارگر خطای «main thread is not in main loop» می‌دهد
+            dev = selected_device()
+            if dev is None and app is not None:
+                dev = getattr(app, "device", None)
+            threading.Thread(target=_record_worker,
+                             args=(slot, dev), daemon=True).start()
 
         def poll_results():
             try:
@@ -609,7 +609,7 @@ def open_settings(parent_root, app=None):
             st = ctk.CTkLabel(row, text="—", font=(fam, 12),
                               text_color=theme.FG_DIM, anchor="e")
             st.pack(side="right", fill="x", expand=True, padx=(6, 0))
-            btn = ctk.CTkButton(row, text=f"ضبط {i + 1}", width=80, height=30,
+            btn = ctk.CTkButton(row, text=f"ضبط {'۱۲۳'[i]}", width=80, height=30,
                                 corner_radius=6, font=(fam, 12, "bold"),
                                 fg_color=theme.SURFACE_2,
                                 hover_color=theme.SURFACE_3, text_color=theme.FG,

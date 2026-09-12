@@ -1,8 +1,12 @@
-"""تست دیالوگ ثبت واژه — فریز/نامرئی‌بودن دیالوگ را بازتولید و تأیید می‌کند.
+"""تست دیالوگ ثبت واژه — بازتولید و تأیید دو باگ:
+
+  ۱) دیالوگ نامرئی + فریز (grab روی پنجره‌ی مخفی) — اصلاح شد
+  ۲) «main thread is not in main loop» — خواندن کمبوی CTk از ترد ضبط —
+     اصلاح شد: دستگاه در ترد اصلی حل می‌شود
 
 بدون تعامل: پنجره تنظیمات باز می‌شود، دکمه «+ ثبت واژه جدید» invoke
-می‌شود و چک می‌کنیم دیالوگ mapped/viewable شود و grab داشته باشد.
-خروجی سالم: «DONE — no freeze» در آخر.
+می‌شود، واژه نوشته و «ضبط ۱» فشار داده می‌شود (با موتور ساختگی) و
+نتیجه‌ی ضبط بررسی می‌شود. خروجی سالم: «DONE — no freeze» در آخر.
 """
 from __future__ import annotations
 
@@ -18,16 +22,41 @@ import customtkinter as ctk
 
 from app import settings_ui
 
+FAKE_TEXT = "ویسپر فلو"  # خروجی موتور ساختگی — واریانت کاندید می‌سازد
 
-def find_button(widget, needle: str):
+
+class FakeEngine:
+    def transcribe(self, samples, sample_rate: int = 16000) -> str:
+        return FAKE_TEXT
+
+
+class FakeApp:
+    engine = FakeEngine()
+    device = None  # «خودکار» — مسیر detect_best_device در ترد کارگر
+
+    def refresh_alias_map(self):
+        pass
+
+
+def find_widget(widget, cls, needle: str):
     for c in widget.winfo_children():
         try:
             txt = c.cget("text")
         except Exception:
             txt = None
-        if isinstance(c, ctk.CTkButton) and txt and needle in txt:
+        if isinstance(c, cls) and txt and needle in txt:
             return c
-        r = find_button(c, needle)
+        r = find_widget(c, cls, needle)
+        if r is not None:
+            return r
+    return None
+
+
+def find_entry(widget):
+    for c in widget.winfo_children():
+        if isinstance(c, ctk.CTkEntry):
+            return c
+        r = find_entry(c)
         if r is not None:
             return r
     return None
@@ -38,29 +67,58 @@ def main():
     root.withdraw()
 
     def run():
-        settings_ui.open_settings(root, app=None)
+        settings_ui.open_settings(root, app=FakeApp())
         root.update()
         win = [w for w in root.winfo_children()
                if isinstance(w, tk.Toplevel)][0]
-        btn = find_button(win, "ثبت واژه جدید")
+        btn = find_widget(win, ctk.CTkButton, "ثبت واژه جدید")
         print("دکمه پیدا شد:", btn is not None)
         btn.invoke()
         for _ in range(30):
             root.update()
             time.sleep(0.03)
-        toplevels = [w for w in win.winfo_children()
-                     if isinstance(w, tk.Toplevel)]
-        print("تعداد دیالوگ:", len(toplevels))
-        if toplevels:
-            d = toplevels[0]
-            print("mapped:", d.winfo_ismapped(),
-                  "| viewable:", d.winfo_viewable(),
-                  "| grab_current == dlg:", d.grab_current() is d)
-            # تنظیمات هنوز به کلیک جواب می‌دهد؟ (grab اشتباه نباشد)
-            print("تنظیمات mapped:", win.winfo_ismapped())
-            d.destroy()
+        dlg = [w for w in win.winfo_children()
+               if isinstance(w, tk.Toplevel)][0]
+        print("mapped:", dlg.winfo_ismapped(),
+              "| viewable:", dlg.winfo_viewable(),
+              "| grab_current == dlg:", dlg.grab_current() is dlg)
+
+        entry = find_entry(dlg)
+        entry.insert(0, "ویسپرفلو")
+
+        # سه لیبل وضعیت همان‌هایی که اول با «—» هستند
+        status_lbls = [c for c in dlg.winfo_children()
+                       if isinstance(c, ctk.CTkLabel)
+                       and c.cget("text") == "—"]
+        if not status_lbls:
+            status_lbls = find_status_labels(dlg)
+        print("تعداد لیبل وضعیت:", len(status_lbls))
+        rec1 = find_widget(dlg, ctk.CTkButton, "ضبط ۱")
+        rec1.invoke()
+
+        status = None
+        for _ in range(300):  # حداکثر ~۱۵ ثانیه (ضبط ۲s + دیکد)
+            root.update()
+            time.sleep(0.03)
+            txt = status_lbls[0].cget("text")
+            if txt != "—" and "در حال ضبط" not in txt:
+                status = txt
+                break
+        print("وضعیت نهایی ضبط ۱:", status)
+        ok = status is not None and "main thread is not in main loop" not in status
+        print("بدون خطای ترد:", ok, "| شنید موتور ساختگی:",
+              status is not None and "شنیده شد" in status)
+        dlg.destroy()
         win.destroy()
         root.destroy()
+
+    def find_status_labels(widget):
+        out = []
+        for c in widget.winfo_children():
+            if isinstance(c, ctk.CTkLabel) and c.cget("text") == "—":
+                out.append(c)
+            out.extend(find_status_labels(c))
+        return out
 
     root.after(150, run)
     root.mainloop()
