@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import logging
 import re
 import threading
 import time
@@ -14,6 +15,11 @@ from pathlib import Path
 
 import numpy as np
 import sherpa_onnx
+
+# pyctcdecode بدون kenlm (زبان‌مودل — که استفاده نمی‌کنیم) در اولین ایمپورت
+# هشدار می‌دهد؛ چون ایمپورتش در _CtcHypothesisDecoder ممکن است زودتر از
+# hotword_asr باشد، سطح لاگر باید همین‌جا و پیش از هر ایمپورت احتمالی تنظیم شود
+logging.getLogger("pyctcdecode").setLevel(logging.ERROR)
 
 _ZWNJ = "\u200c"  # نیم‌فاصله — مدل در پنجره‌های متوالی گاهی همان واژه را
                   # با و گاهی بدون آن می‌گوید و تطبیق دقیق را می‌شکند
