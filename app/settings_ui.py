@@ -288,30 +288,38 @@ def open_settings(parent_root, app=None):
             if lbl:
                 auto["label"] = f"خودکار — {lbl}"
         elif app is not None:
-            # تشخیص پس‌زمینه هنوز تمام نشده — تمام که شد، برچسب زنده به‌روز می‌شود
+            # تشخیص پس‌زمینه هنوز تمام نشده — تمام که شد، برچسب زنده به‌روز می‌شود.
+            # ترد فقط محاسبه می‌کند و نتیجه را در holder می‌گذارد؛ هر فراخوانی
+            # Tk (win.after/...) باید از ترد اصلی باشد وگرنه
+            # «main thread is not in main loop»
+            holder = {"dev": None, "done": False}
+
             def _bg_detect():
                 try:
-                    dev = detect_best_device()
+                    holder["dev"] = detect_best_device()
                 except Exception:
-                    dev = None
-                if dev is None:
-                    return
-
-                def _apply():
-                    if not win.winfo_exists():
-                        return
-                    lbl = _auto_device_name(dev)
-                    if not lbl:
-                        return
-                    auto["label"] = f"خودکار — {lbl}"
-                    vals = [auto["label"]] + [name for _, name in devices]
-                    dev_combo.configure(values=vals)
-                    if dev_combo.get() not in vals:
-                        dev_combo.set(auto["label"])
-
-                win.after(0, _apply)
+                    holder["dev"] = None
+                finally:
+                    holder["done"] = True
 
             threading.Thread(target=_bg_detect, daemon=True).start()
+
+            def _apply_auto_label():
+                if not win.winfo_exists():
+                    return
+                if not holder["done"]:
+                    win.after(400, _apply_auto_label)
+                    return
+                lbl = _auto_device_name(holder["dev"])
+                if not lbl:
+                    return
+                auto["label"] = f"خودکار — {lbl}"
+                vals = [auto["label"]] + [name for _, name in devices]
+                dev_combo.configure(values=vals)
+                if dev_combo.get() not in vals:
+                    dev_combo.set(auto["label"])
+
+            win.after(400, _apply_auto_label)
 
     dev_values = [auto["label"]] + [name for _, name in devices]
     dev_combo = ctk.CTkOptionMenu(cm, values=dev_values, height=36,

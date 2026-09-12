@@ -21,8 +21,26 @@ import tkinter as tk
 import customtkinter as ctk
 
 from app import settings_ui
+from app.config import DEFAULTS
 
 FAKE_TEXT = "ویسپر فلو"  # خروجی موتور ساختگی — واریانت کاندید می‌سازد
+
+
+class FakeConfig:
+    """تنظیمات مستقل از فایل واقعی کاربر — enrolalyz روشن و حالت خودکار."""
+
+    data = {**DEFAULTS, "enroll_alias": True, "input_device": None,
+            "input_device_key": None, "stable_live": False}
+
+    @classmethod
+    def load(cls):
+        return cls()
+
+    def get(self, key):
+        return self.data.get(key)
+
+
+settings_ui.Config = FakeConfig
 
 
 class FakeEngine:
