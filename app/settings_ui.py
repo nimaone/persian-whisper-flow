@@ -292,15 +292,20 @@ def open_settings(parent_root, app=None):
             tester.stop()
             test_btn_var.set("شروع تست")
             spec_canvas.delete("all")
+            quality_lbl.configure(text="", text_color=theme.FG_DIM)
         else:
             dev = selected_device()
             if dev is None:
-                # همان دستگاهی که دیکته استفاده می‌کند — پیش‌فرض سیستم
-                # روی خیلی از سیستم‌ها دستگاهی ساکت است و تست بی‌اثر می‌شود
-                dev = detect_best_device()
+                # «خودکار» = همان دستگاهی که دیکته استفاده می‌کند؛
+                # probe دوباره نه — نتایج detect ناپایدار است و ممکن است
+                # به دستگاهی بیفتد که استریم باز نمی‌کند (بدون اسپاک)
+                dev = getattr(app, "device", None) if app is not None else None
+                if dev is None:
+                    dev = detect_best_device()
                 if dev is None:
                     dev = sd.default.device[0]
             tester.start(dev)
+            test_vals.clear()
             var_testing["on"] = True
             test_btn_var.set("توقف تست")
             poll_spec()
@@ -313,6 +318,20 @@ def open_settings(parent_root, app=None):
     verdict_lbl = ctk.CTkLabel(ct, text="", font=(fam, 13, "bold"),
                                text_color=theme.FG, anchor="e")
     verdict_lbl.pack(fill="x")
+    # نشانگر کیفیت ورودی — نویز پایه/اوج/SNR زنده حین تست
+    test_vals: list[float] = []
+    quality_lbl = ctk.CTkLabel(ct, text="", font=(fam, 12),
+                               text_color=theme.FG_DIM, anchor="e",
+                               wraplength=440, justify="right")
+    quality_lbl.pack(fill="x")
+
+    QUALITY_COLORS = {"good": theme.ACCENT, "warn": theme.WARN,
+                      "bad": theme.DANGER, "none": theme.FG_DIM}
+
+    def update_quality():
+        from app.recorder import input_quality
+        text, level = input_quality(test_vals)
+        quality_lbl.configure(text=text, text_color=QUALITY_COLORS.get(level, theme.FG_DIM))
 
     # --- کارت رفتار ضبط ---
     cr = card(t_mic, "رفتار ضبط")
@@ -350,6 +369,10 @@ def open_settings(parent_root, app=None):
                 toggle_test()
                 return
             if vals:
+                test_vals.extend(vals)
+                if len(test_vals) > 400:
+                    del test_vals[:-400]
+                update_quality()
                 rms = max(vals)
                 norm = min(1.0, rms / 0.04)
                 with hist_lock:

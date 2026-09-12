@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import threading
+import time
 
 import numpy as np
 import sounddevice as sd
@@ -191,24 +192,44 @@ def list_input_devices() -> list[dict]:
     return out
 
 
-def probe_device_level(device: int, seconds: float = 0.35) -> float:
-    """سطح RMS دستگاه ورودی را می‌سنجد — برای تشخیص میکروفون زنده."""
+def probe_device_level(device: int, seconds: float = 0.35) -> tuple[float, bool]:
+    """سطح RMS دستگاه ورودی با استریم واقعی — برای تشخیص میکروفون زنده.
+
+    مقدار دوم «اعتبار» است: دستگاه‌هایی که اصلاً باز نمی‌شوند یا داده‌ی
+    خراب می‌دهند (دامنه بریده/غیرواقعی — بعضی مسیرهای WDM-KS) رد می‌شوند
+    تا detect_best_device روی دستگاه شکسته نگه نایستد.
+    """
     try:
-        dev = sd.query_devices(device, "input")
-        sr = int(dev["default_samplerate"])
-        rec = sd.rec(int(seconds * sr), samplerate=sr, channels=1, dtype="float32", device=device)
-        sd.wait()
-        data = rec.copy()
-        return float(np.sqrt((data.astype(np.float64) ** 2).mean()))
+        info = sd.query_devices(device, "input")
+        sr = int(info["default_samplerate"])
+        vals: list[float] = []
+        peak = 0.0
+        with sd.InputStream(device=device, channels=1, samplerate=sr,
+                            dtype="float32",
+                            blocksize=int(sr * 0.05)) as st:
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < seconds:
+                data, _overflow = st.read(int(sr * 0.05))
+                peak = max(peak, float(np.abs(data).max()))
+                vals.append(float(np.sqrt(
+                    (data[:, 0].astype(np.float64) ** 2).mean())))
+        if not vals:
+            return 0.0, False
+        mean_rms = float(np.mean(vals))
+        # داده‌ی خراب: نمونه فراتر از ۱٫۰ (بریده) یا RMS غیرواقعی
+        if peak > 1.0 or mean_rms > 0.5:
+            return 0.0, False
+        return mean_rms, True
     except Exception:
-        return 0.0
+        return 0.0, False
 
 
 def detect_best_device() -> int | None:
-    """دستگاه ورودی با بالاترین سطح صدا (و نرخ >= 16000) را برمی‌گرداند.
+    """دستگاه ورودی با بالاترین سطح سیگنال (و نرخ >= 16000) را برمی‌گرداند.
 
-    میکروفون‌های مجازی (ManyCam و امثالش) معمولاً سکوت مطلق می‌دهند؛
-    این تابع در startup یک بار اجرا می‌شود.
+    فقط دستگاه‌هایی که واقعاً استریم سالم می‌دهند کاندیدند؛ میکروفون‌های
+    مجازی (ManyCam و امثالش) معمولاً سکوت مطلق می‌دهند و مسیرهای خراب
+    رد می‌شوند. هیچ دستگاهی سیگنال نداشت → None یعنی پیش‌فرض سیستم.
     """
     best, best_rms = None, 0.0
     for i, d in enumerate(sd.query_devices()):
@@ -216,10 +237,34 @@ def detect_best_device() -> int | None:
             continue
         if int(d["default_samplerate"]) < 16000:
             continue
-        rms = probe_device_level(i)
+        rms, valid = probe_device_level(i)
+        if not valid:
+            continue
         if rms > best_rms:
             best, best_rms = i, rms
     if best is not None and best_rms > 0.0002:
         return best
     # هیچ دستگاهی سیگنال نداشت — device None یعنی پیش‌فرض سیستم
     return None
+
+
+def input_quality(vals: list[float]) -> tuple[str, str]:
+    """برآورد کیفیت ورودی از نمونه‌های RMS تست صدا → (متن، سطح).
+
+    سطح یکی از good/warn/bad/none — برای رنگ نشانگر تب میکروفون.
+    کف نویز = چارک ده‌میانگین‌ها، اوج = چارک نودوپنجم.
+    """
+    if not vals:
+        return "برای سنجش کیفیت، تست را شروع کن و چند ثانیه صحبت کن", "none"
+    s = sorted(vals)
+    floor = s[max(0, int(len(s) * 0.10))]
+    peak = s[min(len(s) - 1, int(len(s) * 0.95))]
+    if peak < 0.0008:
+        return "سیگنالی نمی‌آید — دستگاه دیگری را امتحان کن", "bad"
+    snr = 20.0 * float(np.log10(max(peak, 1e-9) / max(floor, 1e-9)))
+    stats = f"نویز پایه {floor:.4f} • اوج صدا {peak:.4f} • SNR≈{snr:.0f}dB"
+    if snr >= 20:
+        return f"کیفیت ورودی: خوب — {stats}", "good"
+    if snr >= 12:
+        return f"کیفیت ورودی: متوسط — {stats}", "warn"
+    return f"کیفیت ورودی: ضعیف — نویز تقریباً هم‌سطح صداست — {stats}", "bad"
