@@ -186,6 +186,41 @@ def test_phrase_variant_does_not_fire_on_lone_fragment():
     assert enroll.apply_aliases("ویسپر فلو را بگو", amap) == "ویسپرفلو را بگو"
 
 
+# ---------- تطبیق فازی (تفاوت decode زنده و نهایی) ----------
+
+def test_fuzzy_matches_near_form_of_long_variant():
+    # مدل در decode نهایی شکل نزدیک اما متفاوتی می‌شنود («بیستسفلوی»)
+    amap = enroll.build_alias_map([
+        {"word": "ویسپرفلو", "variants": ["بیستست فلو"], "enabled": True},
+    ])
+    out = enroll.apply_aliases("من گفتم بیستسفلوی بود", amap)
+    assert "بیستسفلوی" not in out
+    assert "ویسپرفلو" in out
+
+
+def test_fuzzy_never_fires_on_short_tokens():
+    # توکن کوتاه مثل «ویس» یا «سلام» نباید فازی به کلید بلند بخورد
+    amap = enroll.build_alias_map([
+        {"word": "ویسپرفلو", "variants": ["بیستست فلو"], "enabled": True},
+    ])
+    assert enroll.apply_aliases("ویس سلام فلو", amap) == "ویس سلام فلو"
+
+
+def test_fuzzy_never_fires_on_far_words():
+    amap = enroll.build_alias_map([
+        {"word": "ویسپرفلو", "variants": ["بیستست فلو"], "enabled": True},
+    ])
+    sent = "امروز هوا بارانی بود و من رفتم بازار"
+    assert enroll.apply_aliases(sent, amap) == sent
+
+
+def test_exact_match_still_wins_over_fuzzy():
+    amap = enroll.build_alias_map([
+        {"word": "الفبای دوم", "variants": ["الفبا دوم"], "enabled": True},
+    ])
+    assert enroll.apply_aliases("این الفبا دوم است", amap) == "این الفبای دوم است"
+
+
 def test_apply_split_word_from_rejoin_style():
     amap = enroll.build_alias_map([
         {"word": "نمیدانم", "variants": ["نمیدانم ها"], "enabled": True},

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from app.config import app_data_dir
@@ -136,12 +137,21 @@ def build_alias_map(entries: list[dict]) -> dict[str, str]:
 MAX_SPAN = 4  # سقف توکن‌های یک واریانت — شکل شنیده‌ی یک واژه بیشتر نمی‌شود
 
 
+FUZZY_MIN_TOKEN = 5   # توکن کوتاه‌تر فازی تطبیق نمی‌شود — ریسک خرابی واژه عادی
+FUZZY_MIN_KEY = 6     # کلید کوتاه فازی هدف قرار نمی‌گیرد
+FUZZY_RATIO = 0.8     # آستانه شباهت (difflib)
+
+
 def apply_aliases(text: str, alias_map: dict[str, str]) -> str:
     """جایگزینی واریانت‌ها در متن خروجی — تطبیق حریصانه از طولانی‌ترین.
 
     هر دنباله‌ی مجاور توکن‌ها که کلید نرمال چسبیده‌اش در alias_map باشد
     جایگزین می‌شود؛ پس شکل‌های جدا («ای ای») و چسبیده («ای‌ای») هر دو
-    گرفته می‌شوند. جایگزین، واژه‌ی درستِ واردشده‌ی کاربر است.
+    گرفته می‌شوند. اگر تطبیق دقیق نشد، برای توکن‌های بلند تطبیق فازی با
+    کلیدهای بلند انجام می‌شود — چون decode پنجره‌ی زنده و decode نهایی
+    (چانک ۱۶ ثانیه‌ای) همان واژه را به شکل‌های نزدیک اما متفاوتی می‌شنوند
+    (~۳۰٪ توکن در مرزها فرق دارد) و تطبیق دقیقِ تنهایی کافی نیست.
+    جایگزین، واژه‌ی درستِ واردشده‌ی کاربر است.
     """
     if not alias_map or not text or not text.strip():
         return text
@@ -150,16 +160,34 @@ def apply_aliases(text: str, alias_map: dict[str, str]) -> str:
     out: list[str] = []
     i = 0
     while i < len(tokens):
-        hit = None
+        hit, hit_span = None, 1
         for span in range(min(MAX_SPAN, len(tokens) - i), 0, -1):
             w = alias_map.get("".join(keys[i:i + span]))
             if w:
-                hit = w
+                hit, hit_span = w, span
                 break
+        if hit is None and len(keys[i]) >= FUZZY_MIN_TOKEN:
+            w = _fuzzy_hit(keys[i], alias_map)
+            if w:
+                hit = w  # فازی فقط تک‌توکنی است
         if hit is not None:
             out.append(hit)
-            i += span
+            i += hit_span
         else:
             out.append(tokens[i])
             i += 1
     return " ".join(out)
+
+
+def _fuzzy_hit(key: str, alias_map: dict[str, str]) -> str | None:
+    """نزدیک‌ترین کلید بلند با شباهت ≥ FUZZY_RATIO — وگرنه None."""
+    if len(key) < FUZZY_MIN_TOKEN:
+        return None
+    best, best_r = None, 0.0
+    for k, w in alias_map.items():
+        if len(k) < FUZZY_MIN_KEY:
+            continue
+        r = SequenceMatcher(None, key, k).ratio()
+        if r > best_r:
+            best, best_r = w, r
+    return best if best_r >= FUZZY_RATIO else None
