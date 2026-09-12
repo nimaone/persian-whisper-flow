@@ -416,8 +416,14 @@ def open_settings(parent_root, app=None):
                   **switch_style).pack(anchor="e", pady=(8, 0))
     dim(cv2, "اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ اعداد تکی مثل «یک» حروفی می‌مانند")
 
-    # ================= تب پیشرفته =================
+    # ================= تب پیشرفته (اسکرول‌شونده — محتوای بلند) =================
     t_adv = tabview.tab("پیشرفته")
+    t_adv = ctk.CTkScrollableFrame(
+        t_adv, fg_color="transparent", scrollbar_fg_color="transparent",
+        scrollbar_button_color=theme.SURFACE_3,
+        scrollbar_button_hover_color=theme.SURFACE_2,
+    )
+    t_adv.pack(fill="both", expand=True)
 
     ca = card(t_adv, "پردازش")
     arow = ctk.CTkFrame(ca, fg_color="transparent")
@@ -445,6 +451,204 @@ def open_settings(parent_root, app=None):
     txt_hotwords.insert("1.0", "\n".join(str(w) for w in (cfg.get("hotwords") or [])))
     dim(ch_hw, "هر خط یک واژه، حداقل ۲ حرف — اسم‌ها و برندهایی که مدل مدام اشتباه می‌گیرد")
     dim(ch_hw, "با روشن‌کردن، پردازش کمی کندتر می‌شود و ممکن است نشانه‌های پایانی جمله (مثل نقطه) هم درج شوند")
+
+    ce = card(t_adv, "ثبت صوتی واژه‌ها — آزمایشی")
+    dim(ce, "واژه‌ای که مدل مدام اشتباه می‌شنود را ۳ بار صوتی بگو؛ شکل‌های شنیده‌شده را تیک بزن تا در خروجی به واژه‌ی درست تبدیل شوند")
+    dim(ce, "اثر هم روی متن زنده و هم روی متن نهایی دارد؛ با «حذف» هم برطرف می‌شود")
+
+    from app import enroll as enroll_mod
+
+    enroll_store = enroll_mod.EnrollStore.load()
+    enroll_list = ctk.CTkFrame(ce, fg_color="transparent")
+    enroll_list.pack(fill="x")
+
+    def _enroll_changed():
+        enroll_store.save()
+        if app is not None:
+            try:
+                app.refresh_alias_map()
+            except Exception:
+                pass
+        rebuild_enroll_list()
+
+    def rebuild_enroll_list():
+        for w in enroll_list.winfo_children():
+            w.destroy()
+        if not enroll_store.entries:
+            dim(enroll_list, "هنوز واژه‌ای ثبت نشده")
+            return
+        for e in enroll_store.entries:
+            row = ctk.CTkFrame(enroll_list, fg_color="transparent")
+            row.pack(fill="x", pady=1)
+            n_var = len(e.get("variants", []))
+            ctk.CTkLabel(row, text=f"«{e['word']}» — {n_var} واریانت تأییدشده",
+                         font=(fam, 13), text_color=theme.FG,
+                         anchor="e").pack(side="right")
+            ctk.CTkButton(row, text="حذف", width=56, height=26, corner_radius=6,
+                          font=(fam, 12), fg_color=theme.SURFACE_2,
+                          hover_color=theme.DANGER, text_color=theme.FG,
+                          command=lambda wd=e["word"]: (
+                              enroll_store.remove_entry(wd), _enroll_changed())
+                          ).pack(side="left")
+
+    def open_enroll_dialog():
+        dlg = tk.Toplevel(win)
+        dlg.title("ثبت واژه جدید")
+        dlg.geometry("470x430")
+        dlg.attributes("-topmost", True)
+        dlg.grab_set()
+        dlg.configure(bg=theme.BG)
+        style_toplevel(dlg)
+        apply_icon(dlg)
+
+        body = ctk.CTkFrame(dlg, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=16, pady=12)
+
+        ctk.CTkLabel(body, text="واژه‌ی درست — همان‌طور که باید نوشته شود:",
+                     font=(fam, 13), text_color=theme.FG,
+                     anchor="e").pack(fill="x", pady=(0, 3))
+        var_word = tk.StringVar()
+        ctk.CTkEntry(body, textvariable=var_word, font=(fam, 14), height=38,
+                     corner_radius=8, fg_color=theme.SURFACE_2,
+                     border_color=theme.BORDER,
+                     text_color=theme.FG).pack(fill="x")
+
+        ctk.CTkLabel(body, text="سه بار واضح بگو (هر ضبط ۲ ثانیه):",
+                     font=(fam, 13), text_color=theme.FG,
+                     anchor="e").pack(fill="x", pady=(10, 3))
+
+        heard_forms: list[str] = []          # همه‌ی شکل‌های شنیده‌شده
+        var_checks: dict[str, tk.BooleanVar] = {}
+        check_frame = ctk.CTkFrame(body, fg_color="transparent")
+        check_frame.pack(fill="x", pady=(2, 6))
+        busy = {"slot": -1}
+        status_lbls: list[ctk.CTkLabel] = []
+        rec_btns: list[ctk.CTkButton] = []
+        result_q: queue.Queue = queue.Queue()
+
+        engine_ok = app is not None and getattr(app, "engine", None) is not None
+        REC_SEC = 2.0
+
+        def rebuild_checks():
+            for w in check_frame.winfo_children():
+                w.destroy()
+            for v in heard_forms:
+                if v in var_checks:
+                    continue
+                var_checks[v] = tk.BooleanVar(value=True)
+            if not heard_forms:
+                dim(check_frame, "هنوز ضبطی انجام نشده")
+                return
+            dim(check_frame, "شکل‌های شنیده‌شده — هر کدام را تأیید می‌کنی در خروجی جای واژه‌ی درست می‌نشیند:")
+            for v, var in var_checks.items():
+                ctk.CTkCheckBox(check_frame, text=f"«{v}»", variable=var,
+                                **check_style).pack(anchor="e", pady=1)
+
+        def _record_worker(slot: int):
+            import sounddevice as sd
+            try:
+                dev = selected_device()
+                if dev is None and app is not None:
+                    dev = app.device
+                if dev is None:
+                    dev = sd.default.device[0]
+                sr = int(sd.query_devices(dev, "input")["default_samplerate"])
+                rec = sd.rec(int(REC_SEC * sr), samplerate=sr, channels=1,
+                             dtype="float32", device=dev)
+                sd.wait()
+                data = rec[:, 0].astype(np.float32)
+                if sr != 16000:
+                    n = int(len(data) * 16000 / sr)
+                    data = np.interp(np.linspace(0, len(data), n, endpoint=False),
+                                     np.arange(len(data)), data).astype(np.float32)
+                text = str(app.engine.transcribe(data, 16000) or "")
+                variants = enroll_mod.harvest_variants(
+                    app.engine, data, var_word.get(), text=text)
+                result_q.put(("done", slot, text, variants))
+            except Exception as e:
+                result_q.put(("err", slot, str(e)[:60], []))
+
+        def record_slot(slot: int):
+            if busy["slot"] >= 0 or not var_word.get().strip():
+                if not var_word.get().strip():
+                    status_lbls[slot].configure(text="اول واژه‌ی درست را بنویس",
+                                                text_color=theme.DANGER)
+                return
+            busy["slot"] = slot
+            rec_btns[slot].configure(state="disabled")
+            status_lbls[slot].configure(text="در حال ضبط…", text_color=theme.WARN)
+            threading.Thread(target=_record_worker, args=(slot,), daemon=True).start()
+
+        def poll_results():
+            try:
+                while True:
+                    kind, slot, payload, variants = result_q.get_nowait()
+                    rec_btns[slot].configure(state="normal")
+                    busy["slot"] = -1
+                    if kind == "err":
+                        status_lbls[slot].configure(text=f"خطا: {payload}",
+                                                    text_color=theme.DANGER)
+                    else:
+                        new = [v for v in variants if v not in heard_forms]
+                        heard_forms.extend(new)
+                        shown = payload.strip() or "چیزی شنیده نشد"
+                        status_lbls[slot].configure(
+                            text=f"شنیده شد: {shown}",
+                            text_color=theme.ACCENT if new else theme.WARN)
+                        rebuild_checks()
+            except queue.Empty:
+                pass
+            if dlg.winfo_exists():
+                dlg.after(100, poll_results)
+
+        for i in range(3):
+            row = ctk.CTkFrame(body, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            st = ctk.CTkLabel(row, text="—", font=(fam, 12),
+                              text_color=theme.FG_DIM, anchor="e")
+            st.pack(side="right", fill="x", expand=True, padx=(6, 0))
+            btn = ctk.CTkButton(row, text=f"ضبط {i + 1}", width=80, height=30,
+                                corner_radius=6, font=(fam, 12, "bold"),
+                                fg_color=theme.SURFACE_2,
+                                hover_color=theme.SURFACE_3, text_color=theme.FG,
+                                command=lambda s=i: record_slot(s))
+            btn.pack(side="left")
+            status_lbls.append(st)
+            rec_btns.append(btn)
+        if not engine_ok:
+            dim(body, "موتور تشخیص هنوز بارگذاری نشده — بعد از آماده‌شدن اپ دوباره باز کن")
+
+        rebuild_checks()
+        dlg.after(100, poll_results)
+
+        def save_entry():
+            word = var_word.get().strip()
+            if len(word) < 2:
+                return
+            checked = [v for v, var in var_checks.items() if var.get()]
+            enroll_store.add_entry(word, checked)
+            _enroll_changed()
+            dlg.destroy()
+
+        btnrow = ctk.CTkFrame(body, fg_color="transparent")
+        btnrow.pack(side="bottom", fill="x", pady=(8, 0))
+        ctk.CTkButton(btnrow, text="ذخیره واژه", font=(fam, 13, "bold"),
+                      height=36, width=130, corner_radius=8,
+                      fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER,
+                      text_color=theme.ON_ACCENT,
+                      command=save_entry).pack(side="right")
+        ctk.CTkButton(btnrow, text="انصراف", font=(fam, 13),
+                      height=36, width=100, corner_radius=8,
+                      fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3,
+                      text_color=theme.FG,
+                      command=dlg.destroy).pack(side="left")
+
+    ctk.CTkButton(ce, text="+ ثبت واژه جدید", font=(fam, 13, "bold"),
+                  height=34, width=140, corner_radius=8,
+                  fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3,
+                  text_color=theme.FG,
+                  command=open_enroll_dialog).pack(anchor="e", pady=(6, 0))
+    rebuild_enroll_list()
 
     cm_info = card(t_adv, "درباره موتور تشخیص")
     ctk.CTkLabel(cm_info, text="Shenava-Koochik v1.0", font=(fam, 13, "bold"),
@@ -483,6 +687,7 @@ def open_settings(parent_root, app=None):
     dim(c3, "در برنامه‌هایی که با دسترسی مدیر باز شده‌اند درج کار نمی‌کند؛ اپ را هم مدیر اجرا کن یا روش درج را عوض کن")
     dim(c3, "اگر میکروفون را عوض کردی، از تب میکروفون دستگاه را انتخاب کن یا حالت خودکار را نگه دار")
     dim(c3, "اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ خاموش یا روشن‌کردنش از تب درج متن است")
+    dim(c3, "اگر مدل واژه‌ای را مدام غلط می‌شنود، از تب پیشرفته آن را صوتی ثبت کن تا از این پس درست نوشته شود")
 
     # ================= دکمه‌های ثابت پایین (pack در بالای فایل انجام شد) =================
     def _sync(data: dict):

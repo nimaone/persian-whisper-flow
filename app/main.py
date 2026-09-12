@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 from PIL import Image, ImageDraw
 
-from app import paths, persian_itn, voice_commands
-from app import fa_post, first_run
+from app import enroll, fa_post, paths, persian_itn, voice_commands
+from app import first_run
 from app.asr import DirectCtcAsrEngine, LiveTranscriber, SpeechGate, load_engine
 from app.config import APP_TITLE, Config, model_dir, set_autostart
 from app.control_window import ControlWindow
@@ -67,6 +67,20 @@ class App:
         self._silence_t0 = None  # زمان شروع سکوت فعلی (برای توقف خودکار)
         self._engine_dirty = False  # تنظیمات هات‌وورد عوض شده — پس از ضبط rebuild شود
         self._engine_rebuild_requested = False  # تغییر موتور در UI — بعد از بستن تنظیمات
+        self._alias_map: dict[str, str] = {}  # واژه‌های ثبت‌شده — شکل شنیده → درست
+        self.refresh_alias_map()
+
+    def refresh_alias_map(self):
+        """بازخوانی نگاشت واژه‌های ثبت‌شده از دیسک — بعد از افزودن/حذف در تنظیمات."""
+        try:
+            if self.cfg.get("enroll_alias"):
+                self._alias_map = enroll.build_alias_map(
+                    enroll.EnrollStore.load().active()
+                )
+                return
+        except Exception:
+            pass
+        self._alias_map = {}
 
     # ---------- راه‌اندازی ----------
     def start(self):
@@ -90,7 +104,18 @@ class App:
             words = list(self.cfg.get("hotwords") or [])
         except Exception:
             words = []
-        return [str(w) for w in words if len(str(w).strip()) >= 2]
+        out = [str(w) for w in words if len(str(w).strip()) >= 2]
+        # واژه‌های ثبت‌صوتی هم به تقویت beam search می‌روند تا مدل از
+        # منبع به سمت شکل درست سوق پیدا کند (فقط وقتی حالت هات‌وورد روشن است)
+        if self.cfg.get("hotword_boost"):
+            try:
+                for e in enroll.EnrollStore.load().active():
+                    w = str(e.get("word", "")).strip()
+                    if len(w) >= 2 and w not in out:
+                        out.append(w)
+            except Exception:
+                pass
+        return out
 
     def _make_engine(self):
         """موتور متناسب با تنظیمات: هات‌وورد (beam) یا عادی (گری‌دی sherpa).
@@ -328,6 +353,8 @@ class App:
                             text = persian_itn.normalize_text(text, min_tokens=2)
                         if self.cfg.get("rejoin_prefixes"):
                             text = fa_post.rejoin_prefixes(text)
+                        if self._alias_map:
+                            text = enroll.apply_aliases(text, self._alias_map)
                         self.ui_q.put(("text", text))
                     # توقف خودکار پس از سکوت — فقط اگر قبلاً صدایی شنیده شده
                     if auto_stop > 0:
@@ -378,6 +405,8 @@ class App:
             text = persian_itn.normalize_text(text, min_tokens=2)
         if self.cfg.get("rejoin_prefixes"):
             text = fa_post.rejoin_prefixes(text)
+        if self._alias_map:
+            text = enroll.apply_aliases(text, self._alias_map)
         method = self.cfg.get("paste_method")
         restore = bool(self.cfg.get("restore_clipboard"))
         if self.cfg.get("voice_commands"):
@@ -476,6 +505,7 @@ class App:
         old_key = self._engine_key  # قبل از خواندن تنظیمات جدید
         # پنجره تنظیمات کپی خودش را روی دیسک می‌نویسد؛ تنظیمات تازه باید از دیسک خوانده شود
         self.cfg = Config.load()
+        self.refresh_alias_map()
         new_key = self._engine_key
         self.apply_hotkey()
         set_autostart(bool(self.cfg.get("autostart")))

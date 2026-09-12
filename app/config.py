@@ -18,6 +18,7 @@ DEFAULTS = {
     "voice_commands": True,
     "persian_itn": True,         # تبدیل اعداد حروفی به رقم («بیست و سه» → ۲۳)
     "rejoin_prefixes": True,     # چسباندن «می/نمیِ» تنها به واژه بعدی («می کنم» → «میکنم»)
+    "enroll_alias": True,        # نگاشت واژه‌های ثبت‌صوتی روی خروجی (فایل enrollments.json)
     "input_device": None,  # None = تشخیص خودکار
     "autostart": False,
     "overlay_enabled": True,
