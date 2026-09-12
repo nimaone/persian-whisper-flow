@@ -843,9 +843,25 @@ def open_settings(parent_root, app=None):
 
     def close():
         tester.stop()
-        if hotkey_suspended and app is not None:
-            app.resume_hotkey()
+        _resume_hotkey_once()
         win.destroy()
+
+    def _resume_hotkey_once():
+        """برگرداندن میانبر در هر مسیر بسته‌شدن — حتی نابهنجار."""
+        nonlocal hotkey_suspended
+        if hotkey_suspended and app is not None:
+            hotkey_suspended = False
+            try:
+                app.resume_hotkey()
+            except Exception:
+                pass
+
+    def _on_destroy(event):
+        if event.widget is win:
+            _resume_hotkey_once()
+
+    # destroy بدون close (خطای نیمه‌راه در ساخت/کد خارجی) هم پوشش داده می‌شود
+    win.bind("<Destroy>", _on_destroy)
 
     ctk.CTkButton(btn_bar, text="بازنشانی", font=(fam, 13), height=40,
                   width=100, corner_radius=8, fg_color=theme.SURFACE_2,

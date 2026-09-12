@@ -495,6 +495,15 @@ class App:
 
         try:
             open_settings(self.overlay.root, self)
+        except Exception as e:
+            # بازشدن ناقص تنظیمات نباید میانبر را برای همیشه معلق بگذارد —
+            # open_settings ابتدا suspend می‌کند؛ اگر ساخت وسط راه شکست بخورد
+            # هیچ close()ای برای resume اجرا نمی‌شود
+            self._notify(f"تنظیمات باز نشد: {str(e)[:50]}")
+            try:
+                self.apply_hotkey()
+            except Exception:
+                pass
         finally:
             # اشیاء Tkinter پنجره تنظیمات را در thread اصلی collect کن،
             # تا GC داخل thread rebuild به Tcl دست نزند.
