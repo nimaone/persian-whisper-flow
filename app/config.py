@@ -20,6 +20,7 @@ DEFAULTS = {
     "rejoin_prefixes": True,     # چسباندن «می/نمیِ» تنها به واژه بعدی («می کنم» → «میکنم»)
     "enroll_alias": True,        # نگاشت واژه‌های ثبت‌صوتی روی خروجی (فایل enrollments.json)
     "input_device": None,  # None = تشخیص خودکار
+    "input_device_key": None,  # کلید پایدار دستگاه پین‌شده (نام — API) — ایندکس خام بین بوت‌ها ناپایدار است
     "autostart": False,
     "overlay_enabled": True,
     "num_threads": 4,

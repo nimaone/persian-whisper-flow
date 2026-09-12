@@ -185,6 +185,40 @@ class Recorder:
         return total / self._src_rate
 
 
+def current_input_devices() -> list[dict]:
+    """همه‌ی ورودی‌های خام با Host API آن‌ها — پایه‌ی فهرست و بازیابی."""
+    return [{"index": i, "name": d["name"],
+             "rate": int(d["default_samplerate"]),
+             "api": sd.query_hostapis(d["hostapi"])["name"]}
+            for i, d in enumerate(sd.query_devices())
+            if d["max_input_channels"] > 0]
+
+
+def device_label(d: dict) -> str:
+    """برچسب نمایشی پایدار — بدون ایندکس خام (ناپایدار بین بوت‌ها)."""
+    return f"{d['name']} — {d['api']}"
+
+
+def resolve_pinned_device(pinned: int | None, key: str | None) -> int | None:
+    """اعتبارسنجی/بازیابی دستگاه پین‌شده — ایندکس‌های PortAudio بین بوت‌ها
+    و جابه‌جایی USB عوض می‌شوند؛ کلید پایدار (نام — API) مرجع است.
+
+    None در خروجی یعنی دستگاه پین‌شده دیگر پیدا نیست → حالت خودکار.
+    """
+    if pinned is None and not key:
+        return None
+    devices = current_input_devices()
+    if key:
+        for d in devices:
+            if d["index"] == pinned and device_label(d) == key:
+                return pinned  # پین همچنان معتبر
+        for d in devices:
+            if device_label(d) == key:
+                return d["index"]  # ایندکس جابه‌جا شده — با کلید بازیابی
+        return None  # دستگاه پیدا نشد
+    return pinned
+
+
 def list_input_devices() -> list[dict]:
     out = []
     for i, d in enumerate(sd.query_devices()):

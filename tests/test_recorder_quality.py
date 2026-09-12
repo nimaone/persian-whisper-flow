@@ -5,7 +5,8 @@ import numpy as np
 import pytest
 
 from app import recorder
-from app.recorder import dedupe_input_devices, detect_best_device, input_quality
+from app.recorder import (dedupe_input_devices, detect_best_device,
+                          input_quality, resolve_pinned_device)
 
 
 # ---------- input_quality ----------
@@ -84,6 +85,50 @@ def test_dedupe_keeps_device_only_present_in_low_api():
                 "api": "MME"}]
     out = dedupe_input_devices(entries)
     assert len(out) == 1 and out[0]["index"] == 5
+
+
+# ---------- resolve_pinned_device ----------
+
+@pytest.fixture
+def fake_current_devices(monkeypatch):
+    current = [
+        {"index": 13, "name": "Microphone (Iriun Webcam)", "rate": 48000,
+         "api": "Windows WASAPI"},
+        {"index": 15, "name": "Microphone Array (Realtek High Definition Audio)",
+         "rate": 48000, "api": "Windows WASAPI"},
+    ]
+    monkeypatch.setattr(recorder, "current_input_devices", lambda: current)
+    return current
+
+
+def test_resolve_pinned_valid_when_index_and_key_match(fake_current_devices):
+    assert resolve_pinned_device(15, "Microphone Array (Realtek High "
+                                      "Definition Audio) — Windows WASAPI") == 15
+
+
+def test_resolve_pinned_recovers_after_index_shift(fake_current_devices):
+    # بعد از بوت جدید، Realtek از 15 به 13 رفته — کلید پایدار بازیابی می‌کند
+    assert resolve_pinned_device(15, "Microphone Array (Realtek High "
+                                     "Definition Audio) — Windows WASAPI") == 15
+    fake_current_devices.reverse()  # Realtek حالا index 13... بازهم با کلید:
+    shifted = [{"index": 13, "name": "Microphone Array (Realtek High "
+                                "Definition Audio)", "rate": 48000,
+                "api": "Windows WASAPI"},
+               {"index": 15, "name": "Microphone (Iriun Webcam)",
+                "rate": 48000, "api": "Windows WASAPI"}]
+    fake_current_devices[:] = shifted
+    assert resolve_pinned_device(15, "Microphone Array (Realtek High "
+                                     "Definition Audio) — Windows WASAPI") == 13
+
+
+def test_resolve_pinned_vanished_device_falls_back_to_auto(fake_current_devices):
+    assert resolve_pinned_device(9, "Ghost Mic — MME") is None
+
+
+def test_resolve_pinned_without_key_keeps_old_behavior(fake_current_devices):
+    # تنظیمات قدیمی بدون کلید — ایندکس همان‌طور که هست معتبر است
+    assert resolve_pinned_device(15, None) == 15
+    assert resolve_pinned_device(None, None) is None
 
 class _FakeStream:
     """استریم فیک — دستگاه شکسته/داده‌ی خراب را شبیه‌سازی می‌کند."""

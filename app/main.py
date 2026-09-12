@@ -27,7 +27,7 @@ from app.config import APP_TITLE, Config, model_dir, set_autostart
 from app.control_window import ControlWindow
 from app.overlay import Overlay
 from app.paster import insert_text, send_key
-from app.recorder import Recorder, detect_best_device
+from app.recorder import Recorder, detect_best_device, resolve_pinned_device
 
 STATE_IDLE = "idle"
 STATE_LOADING = "loading"
@@ -166,10 +166,12 @@ class App:
                 time.sleep(5)
 
     def _detect_device(self):
-        if self.device is not None:
-            self._device_ready.set()
-            return
-        self.device = detect_best_device()
+        # دستگاه پین‌شده با کلید پایدار اعتبارسنجی می‌شود — ایندکس خام
+        # بین بوت‌ها جابه‌جا می‌شود؛ اگر دستگاه پیدا نبود، خودکار
+        resolved = resolve_pinned_device(
+            self.cfg.get("input_device"), self.cfg.get("input_device_key"))
+        self.device = resolved if resolved is not None \
+            else detect_best_device()
         self._device_ready.set()
 
     # ---------- تری ----------
@@ -529,8 +531,16 @@ class App:
             self._device_ready.clear()
             threading.Thread(target=self._detect_device, daemon=True).start()
         else:
-            self.device = int(dev)
-            self._device_ready.set()
+            resolved = resolve_pinned_device(
+                int(dev), self.cfg.get("input_device_key"))
+            if resolved is None:
+                # دستگاه پین‌شده دیگر موجود نیست — تشخیص خودکار
+                self.device = None
+                self._device_ready.clear()
+                threading.Thread(target=self._detect_device, daemon=True).start()
+            else:
+                self.device = resolved
+                self._device_ready.set()
         # تغییر حالت/لیست هات‌وورد یا موتور متن پایدار → موتور باید عوض شود؛
         # وسط ضبط ممنوع، بعداً در _finish
         if new_key != old_key and self.state in (STATE_RECORDING, STATE_TRANSCRIBING):

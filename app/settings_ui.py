@@ -15,7 +15,8 @@ import numpy as np
 
 from app import theme, smooth_ctk
 from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config, set_autostart
-from app.recorder import Recorder, dedupe_input_devices, detect_best_device
+from app.recorder import (Recorder, dedupe_input_devices, detect_best_device,
+                          device_label)
 from app.win32 import style_toplevel, smooth_show, disable_min_max
 from app.theme import apply_icon
 
@@ -253,7 +254,7 @@ def open_settings(parent_root, app=None):
             all_inputs.append({"index": i, "name": d["name"],
                                "rate": int(d["default_samplerate"]),
                                "api": sd.query_hostapis(d["hostapi"])["name"]})
-    devices = [(d["index"], f"[{d['index']}] {d['name']} — {d['api']}")
+    devices = [(d["index"], device_label(d))
                for d in dedupe_input_devices(all_inputs)]
     # اگر دستگاه پین‌شده‌ی فعلی در فهرست یکدست نیامد (API کم‌ترجیح)، برای
     # دیده‌شدن انتخاب فعلی اضافه شود
@@ -261,8 +262,7 @@ def open_settings(parent_root, app=None):
     if cur_pin is not None and cur_pin not in (idx for idx, _ in devices):
         for e in all_inputs:
             if e["index"] == cur_pin:
-                devices.append((e["index"],
-                                f"[{e['index']}] {e['name']} — {e['api']}"))
+                devices.append((e["index"], device_label(e)))
                 break
 
     auto_label = "خودکار (پرسیگنال‌ترین)"
@@ -284,10 +284,21 @@ def open_settings(parent_root, app=None):
         v = dev_combo.get()
         if v == auto_label or not v:
             return None
-        try:
-            return int(v.split("]")[0][1:])
-        except Exception:
+        for idx, label in devices:
+            if label == v:
+                return idx
+        return None
+
+    def selected_device_key():
+        """کلید پایدار انتخاب فعلی (نام — API) — برای بازیابی بعد از
+        جابه‌جایی ایندکس‌ها بین بوت‌ها."""
+        idx = selected_device()
+        if idx is None:
             return None
+        for i, label in devices:
+            if i == idx:
+                return label
+        return None
 
     ct = card(t_mic, "تست صدا")
     tester = MicTester()
@@ -922,6 +933,7 @@ def open_settings(parent_root, app=None):
         cfg.set("overlay_font_size", int(var_font.get()))
         cfg.set("auto_stop_sec", AUTO_STOP_LABELS.get(var_auto_stop.get(), 0))
         cfg.set("input_device", selected_device())
+        cfg.set("input_device_key", selected_device_key())
         hw_on = bool(var_hotword.get())
         hw_list = [ln.strip() for ln in txt_hotwords.get("1.0", "end").splitlines()
                    if len(ln.strip()) >= 2]
