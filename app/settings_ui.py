@@ -578,6 +578,9 @@ def open_settings(parent_root, app=None):
             rec.stop()
             data = rec.get_buffer_16k()
             s["samples"] = data
+            # بدون این، دکمه پخش برای همیشه disabled می‌ماند — ریشه‌ی
+            # «پخش کار نمی‌کند»؛ حتی ضبط کوتاه برای تشخیص قابل پخش است
+            play_btns[slot].configure(state="normal")
             rec_btns[slot].configure(
                 text=f"ضبط {'۱۲۳'[slot]}", state="normal",
                 fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3)
@@ -645,8 +648,15 @@ def open_settings(parent_root, app=None):
                 btn.configure(text="پخش")
                 return
             sd.stop()
+            # ضبط میکروفون معمولاً خیلی کم‌صدا است (peak ~۰٫۰۱) — مدل ASR
+            # آن را راحت می‌شنود ولی پخش مستقیمش تقریباً نامرئی است؛
+            # برای پخش به peak نرمال می‌شود (سقف تقویت ×۳۰)
+            out = data
+            peak = float(np.abs(data).max())
+            if 0.0 < peak < 0.15:
+                out = np.clip(data * min(30.0, 0.5 / peak), -1.0, 1.0)
             try:
-                sd.play(data, 16000)
+                sd.play(out, 16000)
             except Exception as e:
                 status_lbls[slot].configure(text=f"خطای پخش: {str(e)[:40]}",
                                             text_color=theme.DANGER)

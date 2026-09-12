@@ -71,6 +71,7 @@ def main():
         root.update()
         win = [w for w in root.winfo_children()
                if isinstance(w, tk.Toplevel)][0]
+        win.geometry("560x640+2600+80")  # بیرون از صفحه — تداخل با کاربر نداشته باشد
         btn = find_widget(win, ctk.CTkButton, "ثبت واژه جدید")
         print("دکمه پیدا شد:", btn is not None)
         btn.invoke()
@@ -79,6 +80,7 @@ def main():
             time.sleep(0.03)
         dlg = [w for w in win.winfo_children()
                if isinstance(w, tk.Toplevel)][0]
+        dlg.geometry("470x430+2600+120")
         print("mapped:", dlg.winfo_ismapped(),
               "| viewable:", dlg.winfo_viewable(),
               "| grab_current == dlg:", dlg.grab_current() is dlg)
@@ -115,6 +117,35 @@ def main():
         ok = status is not None and "main thread is not in main loop" not in status
         print("بدون خطای ترد:", ok, "| شنید موتور ساختگی:",
               status is not None and "شنیده شد" in status)
+
+        # --- مسیر پخش: فشار پخش باید sd.play را اجرا و دکمه را «قطع» کند ---
+        import sounddevice as sd
+        played = {"n": 0, "peak": 0.0}
+        orig_play = sd.play
+
+        def spy_play(data, *a, **kw):
+            import numpy as _np
+            played["n"] += 1
+            played["peak"] = float(_np.abs(_np.asarray(data)).max())
+            return orig_play(data, *a, **kw)
+
+        sd.play = spy_play
+        pbtn = find_widget(dlg, ctk.CTkButton, "پخش")
+        print("دکمه پخش پیدا شد:", pbtn is not None,
+              "| state:", pbtn.cget("state") if pbtn else None)
+        pbtn.invoke()
+        for _ in range(20):
+            root.update()
+            time.sleep(0.03)
+        print("sd.play فراخوانی شد:", played["n"] > 0,
+              "| peak بافر پخش:", round(played["peak"], 3),
+              "| متن دکمه:", pbtn.cget("text"))
+        pbtn.invoke()  # قطع
+        for _ in range(10):
+            root.update()
+            time.sleep(0.03)
+        print("بعد از قطع، متن دکمه:", pbtn.cget("text"))
+        sd.play = orig_play
         dlg.destroy()
         win.destroy()
         root.destroy()
