@@ -156,6 +156,34 @@ def test_siblings_empty_for_unknown_or_lone_device():
     assert device_siblings(entries, 5) == []
     assert device_siblings(entries, 99) == []
 
+
+# ---------- زنجیره‌ی جایگزین استارت ضبط ----------
+
+def test_fallback_chain_order_and_dedup(monkeypatch):
+    from app import main as main_module
+    monkeypatch.setattr(recorder, "current_input_devices", lambda: [
+        {"index": 1, "name": "Microphone Array (Realtek)", "rate": 44100,
+         "api": "MME"},
+        {"index": 15, "name": "Microphone Array (Realtek HD Audio Mic input)",
+         "rate": 44100, "api": "Windows WDM-KS"},
+    ])
+    monkeypatch.setattr(recorder, "device_siblings",
+                        lambda entries, index: [e for e in entries
+                                                if e["index"] != index])
+    chain = main_module._device_fallback_chain(15)
+    assert chain == [15, 1, None]      # انتخابی → مسیر دیگر همان میکروفون → پیش‌فرض
+    assert main_module._device_fallback_chain(None) == [None]
+    # تکراری‌ها حذف می‌شوند (اگر انتخابی خودش پیش‌فرض بود)
+    assert main_module._device_fallback_chain(1) == [1, 15, None]
+
+
+def test_fallback_chain_tolerates_broken_enumeration(monkeypatch):
+    from app import main as main_module
+    def boom():
+        raise RuntimeError("no audio subsystem")
+    monkeypatch.setattr(recorder, "current_input_devices", boom)
+    assert main_module._device_fallback_chain(7) == [7, None]
+
 class _FakeStream:
     """استریم فیک — دستگاه شکسته/داده‌ی خراب را شبیه‌سازی می‌کند."""
 

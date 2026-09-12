@@ -49,6 +49,27 @@ def _beep(start: bool):
         pass
 
 
+def _device_fallback_chain(device: int | None) -> list[int | None]:
+    """زنجیره‌ی تلاش برای باز کردن میکروفون: دستگاه انتخابی → مسیرهای دیگر
+    Host API همان میکروفون فیزیکی → پیش‌فرض سیستم.
+
+    بعضی مسیرها (WDM-KS، میکروفون‌های مجازی بی‌برنامه) باز نمی‌شوند؛
+    شکست یکی نباید دیکته را کلاً از کار بیندازد.
+    """
+    devs: list[int | None] = []
+    if device is not None:
+        devs.append(device)
+        try:
+            from app.recorder import current_input_devices, device_siblings
+            devs.extend(e["index"] for e in
+                        device_siblings(current_input_devices(), device))
+        except Exception:
+            pass
+    if None not in devs:
+        devs.append(None)  # پیش‌فرض سیستم — آخرین جان پناه
+    return list(dict.fromkeys(devs))
+
+
 class App:
     def __init__(self):
         self.cfg = Config.load()
@@ -290,14 +311,31 @@ class App:
         # صبر برای تشخیص میکروفون (معمولاً در استارتاپ تمام شده)
         if not self._device_ready.wait(timeout=8):
             pass  # با دستگاه پیش‌فرض ادامه می‌دهیم
-        rec = Recorder(device=self.device)
-        try:
-            rec.start()
-        except Exception as e:
+        if self.device is None:
+            # تشخیص پس‌زمینه هنوز تمام نشده — همین‌جا حل می‌کنیم
+            try:
+                self.device = detect_best_device()
+            except Exception:
+                self.device = None
+        # زنجیره‌ی جایگزین: شکست یک مسیر نباید دیکته را کلاً بیندازد —
+        # بعضی مسیرها (WDM-KS، میکروفون مجازی بی‌برنامه) باز نمی‌شوند
+        rec = None
+        last_err: Exception | None = None
+        for dev in _device_fallback_chain(self.device):
+            r = Recorder(device=dev)
+            try:
+                r.start()
+                rec = r
+                self.device = dev  # دستگاهی که واقعاً باز شد
+                break
+            except Exception as e:
+                last_err = e
+        if rec is None:
             with self._state_lock:
                 self.state = STATE_IDLE
             self._ui_set_state(STATE_IDLE)
-            self._notify(f"میکروفون باز نشد: {str(e)[:40]}")
+            msg = str(last_err)[:40] if last_err else "دستگاهی باز نشد"
+            self._notify(f"میکروفون باز نشد: {msg}")
             return
         self.recorder = rec
         with self._state_lock:
