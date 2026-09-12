@@ -629,13 +629,30 @@ def open_settings(parent_root, app=None):
             data = slots[slot]["samples"]
             if data is None or not data.size:
                 return
-            if playing["slot"] == slot:
+            btn = play_btns[slot]
+            if playing["slot"] == slot:  # در حال پخش — قطع
                 sd.stop()
                 playing["slot"] = -1
+                btn.configure(text="پخش")
                 return
             sd.stop()
-            sd.play(data, 16000)
+            try:
+                sd.play(data, 16000)
+            except Exception as e:
+                status_lbls[slot].configure(text=f"خطای پخش: {str(e)[:40]}",
+                                            text_color=theme.DANGER)
+                return
             playing["slot"] = slot
+            btn.configure(text="قطع")
+
+            def _reset():
+                # پایان طبیعی پخش — بدون این، فشار بعدی «قطع» می‌شد و صدا نمی‌داد
+                if playing["slot"] == slot:
+                    playing["slot"] = -1
+                    if btn.winfo_exists():
+                        btn.configure(text="پخش")
+
+            dlg.after(int(len(data) / 16000 * 1000) + 300, _reset)
 
         def poll_results():
             try:

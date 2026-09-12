@@ -54,17 +54,27 @@ class FakeEngine:
         return self.text
 
 
-def test_harvest_filters_correct_word_prefixes_and_short_tokens():
+def test_harvest_heard_correct_returns_empty():
+    eng = FakeEngine("ویسپرفلو")
+    out = enroll.harvest_variants(eng, np.zeros(32000, dtype=np.float32), "ویسپرفلو")
+    assert out == []
+
+
+def test_harvest_split_heard_form_is_whole_phrase():
+    # مدل «ویسپرفلو» را دو‌تکه شنید — واریانت باید کل عبارت باشد، نه تکه‌ها
+    eng = FakeEngine("ویسپر فلو")
+    out = enroll.harvest_variants(eng, np.zeros(32000, dtype=np.float32), "ویسپرفلو")
+    assert out == ["ویسپر فلو"]
+
+
+def test_harvest_drops_prefixes_and_short_noise_tokens():
     eng = FakeEngine("می ویسپر فلو و")
     out = enroll.harvest_variants(eng, np.zeros(32000, dtype=np.float32), "ویسپرفلو")
-    # «می» پیشوند است، «و» تک‌حرفی — فقط شکل‌های متفاوت باقی می‌مانند
-    assert "می" not in out
-    assert "و" not in out
-    assert "ویسپر" in out and "فلو" in out
+    assert out == ["ویسپر فلو"]
 
 
-def test_harvest_dedupes_and_caps_at_five():
-    eng = FakeEngine(" ".join(["کلاود"] * 8))
+def test_harvest_wrong_single_word_is_variant():
+    eng = FakeEngine("کلاود")
     out = enroll.harvest_variants(eng, np.zeros(32000, dtype=np.float32), "کلود")
     assert out == ["کلاود"]
 
@@ -165,6 +175,15 @@ def test_apply_no_map_or_empty_text_is_identity():
     assert enroll.apply_aliases("متن", {}) == "متن"
     assert enroll.apply_aliases("", {"a": "b"}) == ""
     assert enroll.apply_aliases("متن", {"a": "b"}) == "متن"
+
+
+def test_phrase_variant_does_not_fire_on_lone_fragment():
+    # تکه‌ی «فلو» تنها نباید به واژه‌ی کامل تبدیل شود — فقط عبارت کامل
+    amap = enroll.build_alias_map([
+        {"word": "ویسپرفلو", "variants": ["ویسپر فلو"], "enabled": True},
+    ])
+    assert enroll.apply_aliases("فلو را بگو", amap) == "فلو را بگو"
+    assert enroll.apply_aliases("ویسپر فلو را بگو", amap) == "ویسپرفلو را بگو"
 
 
 def test_apply_split_word_from_rejoin_style():

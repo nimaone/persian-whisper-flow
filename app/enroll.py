@@ -79,11 +79,13 @@ class EnrollStore:
 
 def harvest_variants(engine, samples, correct_word: str,
                      text: str | None = None) -> list[str]:
-    """دیکد ضبط‌های واژه → شکل‌های شنیده‌شده‌ی کاندید (شبه‌صوت، ترتیبی).
+    """دیکد ضبط واژه → «شکل شنیده‌شده» به‌صورت عبارت کامل (نه تکه‌تکه).
 
-    واریانت باید با واژه‌ی درست تفاوت معنادار داشته باشد: کلید نرمال
-    متفاوت، حداقل ۲ حرف، و از پیشوندهای می/نمی جدا نباشد.
-    text از قبل دیکدشده پاس شود تا inference دوباره اجرا نشود.
+    هر توکنِ جدا به‌عنوان واریانت خطرناک است: تکه‌ای مثل «فلو» در جمله‌های
+    عادی هم می‌آید و به اشتباه به واژه‌ی کامل تبدیل می‌شد. واریانت = کل
+    عبارت شنیده‌شده که تطبیق چندتوکنی روی آن انجام می‌شود. توکن‌های پیشوند
+    می/نمی و تک‌حرفی (نویز) از عبارت حذف می‌شوند. اگر مدل دقیقاً خود واژه
+    را شنیده باشد، واریانتی لازم نیست.
     """
     if samples is None or getattr(samples, "size", 0) == 0:
         return []
@@ -92,15 +94,13 @@ def harvest_variants(engine, samples, correct_word: str,
             text = engine.transcribe(samples, 16000)
         except Exception:
             return []
-    right = norm_word(correct_word)
-    out: list[str] = []
-    for tok in text.split():
-        key = norm_word(tok)
-        if not key or key == right or len(key) < 2 or tok in MI_PREFIXES:
-            continue
-        if tok not in out:
-            out.append(tok)
-    return out[:5]
+    toks = [t for t in text.split()
+            if t not in MI_PREFIXES and len(norm_word(t)) >= 2]
+    if not toks:
+        return []
+    if len(toks) == 1 and norm_word(toks[0]) == norm_word(correct_word):
+        return []  # مدل درست شنیده — چیزی برای اصلاح نیست
+    return [" ".join(toks)]
 
 
 def build_alias_map(entries: list[dict]) -> dict[str, str]:
