@@ -496,8 +496,10 @@ def open_settings(parent_root, app=None):
         dlg.title("ثبت واژه جدید")
         dlg.geometry("470x430")
         dlg.attributes("-topmost", True)
-        dlg.grab_set()
         dlg.configure(bg=theme.BG)
+        # style_toplevel پنجره را مخفی نگه می‌دارد (ضد فلش سفید)؛ نمایش
+        # در پایان با smooth_show — و grab بعد از نمایان‌شدن، وگرنه رویدادها
+        # به پنجره‌ی نامرئی می‌رود و تنظیمات فریز می‌شود
         style_toplevel(dlg)
         apply_icon(dlg)
 
@@ -620,6 +622,8 @@ def open_settings(parent_root, app=None):
 
         rebuild_checks()
         dlg.after(100, poll_results)
+        smooth_show(dlg)  # نمایش نرم بعد از ساخت کامل — ویندوز از قبل مخفی بود
+        dlg.grab_set()    # فقط بعد از نمایان‌شدن؛گرنه grab روی پنجره مخفی می‌ماند
 
         def save_entry():
             word = var_word.get().strip()
