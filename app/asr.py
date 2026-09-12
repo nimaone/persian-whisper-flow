@@ -476,10 +476,12 @@ class LiveTranscriber:
        می‌گیرد، نه خطای همیشگی او را؛ پس نرم‌تر از قانون ۱ اعمال می‌شود.
     """
 
+    STABLE_WINDOW_SEC = 16.0
+
     def __init__(
         self,
         engine: AsrEngine,
-        window_sec: float = 10.0,
+        window_sec: float | None = None,
         stable_live: bool = False,
         margin: float = 0.02,
         hysteresis: int = 2,
@@ -489,7 +491,13 @@ class LiveTranscriber:
         vote_high_conf: float = 0.90,
     ):
         self.engine = engine
-        self.window_sec = window_sec
+        # پنجره‌ی حالت پایدار ۱۶ ثانیه است: دیکته‌های ۱۰-۱۵ ثانیه‌ای —
+        # کاربرد اصلی — بدون بریدن ابتدای جمله دیده می‌شوند و اسکرول
+        # پنجره (و بازآرایش پیشوند) نمی‌شود؛ هزینه‌ی tick ~۵۶۰ms < ۸۰۰ms
+        # (آزمایش ۱۴). مقدار صریح پارامتر، بر این پیش‌فرض می‌نشیند.
+        self.window_sec = window_sec if window_sec is not None else (
+            self.STABLE_WINDOW_SEC if stable_live else 10.0
+        )
         self.stable_live = bool(stable_live)
         self.margin = float(margin)
         self.hysteresis = max(1, int(hysteresis))
@@ -577,7 +585,7 @@ class LiveTranscriber:
         # فقط وقتی بافر جلوتر از پنجره رفته باشد معنا دارد؛ در پنجره‌ی
         # «هم‌اندازه با بافر» (شروع ضبط یا کلیپ کوتاه) لبه‌ی قدیمی مرز
         # سکوتِ قبل از گفتار است، نه برش واژه.
-        window_scrolled = buf_end - t_start >= self.window_sec + 0.8
+        window_scrolled = buf_end >= self.window_sec + 0.8  # بافر از پنجره بلندتر شده (مطلق، نه نسبت به t_startِ کلمپ‌شده)
         if window_scrolled and (t0 - t_start) < self.lock_edge_sec:
             return False
         # قانون ۳: رقیب و رأی. واژه‌ی نزدیک لبه‌ی زنده‌ی پنجره (در حال
@@ -614,7 +622,17 @@ class LiveTranscriber:
         # فریز تا ابد؛ بازراه‌اندازی با پنجره‌ی جاری درست است.
         m0 = SequenceMatcher(None, cur_keys, new_keys, autojunk=False)
         if sum(b.size for b in m0.get_matching_blocks()) == 0:
-            return True  # هیچ هم‌پوشانی — بازراه‌اندازی
+            # گارد بازراه‌اندازی (آزمایش ۱۴): یک tick نویزی/بی‌کیفیت با
+            # متن بی‌ربط نباید پیشوند قفل‌شده را پاک کند — فروپاشی نمایش
+            # به چند واژه در دیکته‌های ۱۰-۱۵ ثانیه‌ای از همین‌جا بود.
+            # مجاز فقط وقتی: پنجره از نمایش جلو زده (مورد فریز)، نمایش
+            # فعلی کوتاه است (چیزی برای از دست دادن نیست)، یا کاندید
+            # بلندتر و دست‌کم هم‌اعتماد است (تمدید روشن واقعی).
+            window_scrolled = buf_end >= self.window_sec + 0.8  # بافر از پنجره بلندتر شده (مطلق، نه نسبت به t_startِ کلمپ‌شده)
+            if window_scrolled or len(cur_words) <= 4:
+                return True
+            return (len(new_words) > len(cur_words)
+                    and candidate.confidence >= current.confidence)
 
         # ادامه‌ی متن قبلی: چون پیشوند پایدار است، فقط دنباله اضافه می‌شود.
         if len(new_words) >= len(cur_words) and all(
@@ -644,6 +662,17 @@ class LiveTranscriber:
                 return True
             return True
 
+        # «توضیح بهتر همان صدا»: پنجره یک ابرمجموعه از صدای قبلی است و
+        # واژه‌های قفل‌شده در پنجره‌های اول (با کانتکست کم) در re-decode با
+        # کانتکست بلندتر شکل دیگری می‌گیرند — تطبیق دقیق پیشوند می‌شکند و
+        # رشد قفل می‌شود (آزمایش ۱۵ روی صدای کاربر). کاندید بلندتر با
+        # اعتماد هم‌تر/بالاتر شواهد بیشتری از همان صدا دارد و حق جایگزینی
+        # دارد؛ چون کوچک‌شدن نمایش بدون اسکرول مسدود است، این جایگزینی
+        # یک‌طرفه و رشدکننده است.
+        if len(new_words) > len(cur_words) \
+                and candidate.confidence >= current.confidence - 0.05:
+            return True
+
         # پنجره‌ی ۱۰ ثانیه‌ای جلو رفته و واژه‌های ابتدایی خارج شده‌اند؛
         # این جابه‌جایی طبیعی است و نباید متن را برای همیشه قفل کند.
         shift = self._shift_prefix_len(cur_words, new_words)
@@ -656,9 +685,13 @@ class LiveTranscriber:
 
         # با هم‌ترازسازی واژه‌ها فقط تغییرهای واقعی را می‌سنجم؛ حذف ابتدای
         # متن به‌خاطر حرکت پنجره و درج دنباله‌ی جدید خطای نوسان نیست.
+        # مخرج overlap = طول نمایش فعلی (نه min) — وگرنه یک کاندید خیلی
+        # کوتاه که فقط چند واژه‌ی آخرش می‌خورد «تطبیق کامل» حساب می‌شد
+        # و بقیه‌ی نمایش را پاک می‌کرد (فروپاشی نمایش؛ آزمایش ۱۴).
+        window_scrolled = buf_end >= self.window_sec + 0.8  # بافر از پنجره بلندتر شده (مطلق، نه نسبت به t_startِ کلمپ‌شده)
         matcher = SequenceMatcher(None, cur_keys, new_keys, autojunk=False)
         matched = sum(block.size for block in matcher.get_matching_blocks())
-        overlap = matched / max(1, min(len(cur_words), len(new_words)))
+        overlap = matched / max(1, len(cur_words))
         if overlap < 0.65 or candidate.confidence < current.confidence - 0.10:
             return False
 
@@ -682,8 +715,10 @@ class LiveTranscriber:
                 ):
                     return False
             elif tag == "delete":
-                # حذف از ابتدا معمولاً به‌خاطر حرکت پنجره است؛ در بقیه‌ی
-                # موارد فقط اگر اطمینان کلی به‌قدر کافی نیفتد بپذیر.
+                # حذف از ابتدا فقط با حرکت پنجره معنا دارد؛ بدون اسکرول،
+                # حذفِ واژه‌های قفل‌شده = ناپایداری کاندید، نه اصلاح.
+                if i1 == 0 and not window_scrolled:
+                    return False
                 if i1 != 0 and candidate.confidence < current.confidence - 0.10:
                     return False
             elif tag == "insert":
@@ -695,12 +730,15 @@ class LiveTranscriber:
 
         return True
 
-    def partial_result(self, buffer16k: np.ndarray) -> AsrHypothesis:
+    def partial_result(
+        self, buffer16k: np.ndarray, t_offset: float = 0.0
+    ) -> AsrHypothesis:
         """ترنسکرایپ حین ضبط روی پنجره‌ی انتهای بافر.
 
-        زمان مطلق پنجره از طول بافر می‌آید (پایان بافر = اکنون)، پس
-        واژه‌های پنجره‌های پیاپی روی یک خط زمانی مشترک می‌نشینند و
-        حافظه‌ی رأی/رقیب بین آن‌ها معنا پیدا می‌کند.
+        زمان مطلق پنجره = t_offset (جایگاه بافر در کل ضبط) + طول بافر؛
+        main.py فقط پنجره‌ی انتهایی را می‌فرستد، پس بدون t_offset بافر
+        همیشه «از صفر» فرض می‌شد: خط زمانی رأی/رقیب و تشخیص اسکرول
+        پنجره هرگز فعال نمی‌شد (بافر ۱۰-۱۶ ثانیه‌ای = اکنونِ همیشگی).
         """
         win = buffer16k[-int(self.window_sec * 16000):]
         if win.size < 1600:  # کمتر از 0.1s صدا
@@ -711,7 +749,7 @@ class LiveTranscriber:
                 return AsrHypothesis(self.engine.transcribe(win))
             except Exception:
                 return AsrHypothesis("")
-        buf_end = buffer16k.size / 16000.0
+        buf_end = t_offset + buffer16k.size / 16000.0
         t_start = max(0.0, buf_end - self.window_sec)
         try:
             details = getattr(self.engine, "transcribe_with_details", None)
@@ -810,6 +848,12 @@ class LiveTranscriber:
             return True
         cur_words = self._words(current)
         new_words = self._words(candidate)
+        if len(new_words) < len(cur_words):
+            # سوپاپ نباید کاندید کوتاه‌شونده را رد کند: بدون حرکت پنجره،
+            # کوچک‌شدن نمایش = ناپایداری مدل، نه اصلاح (آزمایش ۱۴).
+            window_scrolled = buf_end >= self.window_sec + 0.8  # بافر از پنجره بلندتر شده (مطلق، نه نسبت به t_startِ کلمپ‌شده)
+            if not window_scrolled:
+                return False
         if len(new_words) >= len(cur_words) and all(
             _cmp_key(n.text) == _cmp_key(c.text)
             for n, c in zip(new_words, cur_words)
@@ -818,9 +862,14 @@ class LiveTranscriber:
             return all(self._word_lockable(w, t_start, buf_end) for w in tail)
         return True
 
-    def partial(self, buffer16k: np.ndarray) -> str:
-        """ترنسکرایپِ حین ضبط روی پنجره‌ی انتهای بافر."""
-        return self.partial_result(buffer16k).text
+    def partial(self, buffer16k: np.ndarray, t_offset: float = 0.0) -> str:
+        """ترنسکرایپِ حین ضبط روی پنجره‌ی انتهای بافر.
+
+        t_offset = جایگاه مطلق ابتدای بافر در ثانیه (main.py از
+        Recorder.duration_sec منهای طول بافر می‌سازد) — بدون آن خط
+        زمانی مشترک رأی/رقیب و تشخیص اسکرول پنجره از بین می‌رود.
+        """
+        return self.partial_result(buffer16k, t_offset=t_offset).text
 
     def final(self, buffer16k: np.ndarray) -> str:
         """ترنسکرایپ نهایی روی کل بافر بعد از توقف ضبط."""

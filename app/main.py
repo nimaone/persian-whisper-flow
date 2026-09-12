@@ -388,7 +388,9 @@ class App:
                     )) if buf.size else 0.0
                     should_decode = gate.should_decode(gate_rms, now=t0)
                     if should_decode:
-                        text = self.live.partial(buf)
+                        text = self.live.partial(
+                            buf, t_offset=max(
+                                0.0, rec.duration_sec() - buf.size / 16000.0))
                         if self.cfg.get("persian_itn"):
                             text = persian_itn.normalize_text(text, min_tokens=2)
                         if self.cfg.get("rejoin_prefixes"):
