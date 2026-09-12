@@ -453,7 +453,16 @@ def open_settings(parent_root, app=None):
     dim(ch_hw, "با روشن‌کردن، پردازش کمی کندتر می‌شود و ممکن است نشانه‌های پایانی جمله (مثل نقطه) هم درج شوند")
 
     ce = card(t_adv, "ثبت صوتی واژه‌ها — آزمایشی")
-    dim(ce, "واژه‌ای که مدل مدام اشتباه می‌شنود را ۳ بار صوتی بگو؛ شکل‌های شنیده‌شده را تیک بزن تا در خروجی به واژه‌ی درست تبدیل شوند")
+
+    def _sync_enroll_ui():
+        # تعریف قبل از دکمه، ولی بدنه در زمان فراخوانی resolve می‌شود
+        add_btn.configure(state="normal" if var_enroll.get() else "disabled")
+
+    var_enroll = tk.BooleanVar(value=bool(cfg.get("enroll_alias")))
+    ctk.CTkSwitch(ce, text="اصلاح واژه‌های ثبت‌شده در خروجی",
+                  variable=var_enroll, command=_sync_enroll_ui,
+                  **switch_style).pack(anchor="e", pady=(0, 6))
+    dim(ce, "واژه‌ای که مدل مدام اشتباه می‌شنود را ضبط کن؛ شکل‌های شنیده‌شده را تیک بزن تا در خروجی به واژه‌ی درست تبدیل شوند")
     dim(ce, "اثر هم روی متن زنده و هم روی متن نهایی دارد؛ با «حذف» هم برطرف می‌شود")
 
     from app import enroll as enroll_mod
@@ -727,11 +736,13 @@ def open_settings(parent_root, app=None):
                       text_color=theme.FG,
                       command=dlg.destroy).pack(side="left")
 
-    ctk.CTkButton(ce, text="+ ثبت واژه جدید", font=(fam, 13, "bold"),
-                  height=34, width=140, corner_radius=8,
-                  fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3,
-                  text_color=theme.FG,
-                  command=open_enroll_dialog).pack(anchor="e", pady=(6, 0))
+    add_btn = ctk.CTkButton(ce, text="+ ثبت واژه جدید", font=(fam, 13, "bold"),
+                            height=34, width=140, corner_radius=8,
+                            fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3,
+                            text_color=theme.FG,
+                            command=open_enroll_dialog)
+    add_btn.pack(anchor="e", pady=(6, 0))
+    _sync_enroll_ui()
     rebuild_enroll_list()
 
     cm_info = card(t_adv, "درباره موتور تشخیص")
@@ -795,6 +806,8 @@ def open_settings(parent_root, app=None):
         var_auto_stop.set(auto_stop_labels.get(int(data.get("auto_stop_sec") or 0), "خاموش"))
         var_hotword.set(bool(data.get("hotword_boost")))
         var_stable_live.set(bool(data.get("stable_live")))
+        var_enroll.set(bool(data.get("enroll_alias")))
+        _sync_enroll_ui()
         txt_hotwords.delete("1.0", "end")
         txt_hotwords.insert("1.0", "\n".join(str(w) for w in (data.get("hotwords") or [])))
 
@@ -832,6 +845,7 @@ def open_settings(parent_root, app=None):
         cfg.set("hotword_boost", hw_on)
         cfg.set("hotwords", hw_list)
         cfg.set("stable_live", bool(var_stable_live.get()))
+        cfg.set("enroll_alias", bool(var_enroll.get()))
         cfg.save()
         set_autostart(var_autostart.get())
         tester.stop()

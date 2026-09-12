@@ -106,8 +106,8 @@ class App:
             words = []
         out = [str(w) for w in words if len(str(w).strip()) >= 2]
         # واژه‌های ثبت‌صوتی هم به تقویت beam search می‌روند تا مدل از
-        # منبع به سمت شکل درست سوق پیدا کند (فقط وقتی حالت هات‌وورد روشن است)
-        if self.cfg.get("hotword_boost"):
+        # منبع به سمت شکل درست سوق پیدا کند (فقط وقتی هر دو حالت روشن‌اند)
+        if self.cfg.get("hotword_boost") and self.cfg.get("enroll_alias"):
             try:
                 for e in enroll.EnrollStore.load().active():
                     w = str(e.get("word", "")).strip()
