@@ -6,7 +6,8 @@ import pytest
 
 from app import recorder
 from app.recorder import (dedupe_input_devices, detect_best_device,
-                          input_quality, resolve_pinned_device)
+                          device_siblings, input_quality,
+                          resolve_pinned_device)
 
 
 # ---------- input_quality ----------
@@ -129,6 +130,31 @@ def test_resolve_pinned_without_key_keeps_old_behavior(fake_current_devices):
     # تنظیمات قدیمی بدون کلید — ایندکس همان‌طور که هست معتبر است
     assert resolve_pinned_device(15, None) == 15
     assert resolve_pinned_device(None, None) is None
+
+
+# ---------- device_siblings (fallback مسیر جایگزین) ----------
+
+def test_siblings_same_mic_other_apis_ordered_by_preference():
+    entries = [
+        {"index": 1, "name": "Microphone Array (Realtek High Definition Audio)",
+         "rate": 44100, "api": "MME"},
+        {"index": 15, "name": "Microphone Array (Realtek High Definition Audio)",
+         "rate": 48000, "api": "Windows WASAPI"},
+        {"index": 18, "name": "Microphone Array (Realtek HD Audio Mic input)",
+         "rate": 44100, "api": "Windows WDM-KS"},
+        {"index": 2, "name": "Microphone (Iriun Webcam)", "rate": 44100,
+         "api": "MME"},
+    ]
+    sibs = device_siblings(entries, 18)   # WDM-KS شکسته — جایگزین‌هایش:
+    assert [s["index"] for s in sibs] == [15, 1]   # WASAPI قبل از MME
+    assert 2 not in [s["index"] for s in sibs]
+
+
+def test_siblings_empty_for_unknown_or_lone_device():
+    entries = [{"index": 5, "name": "Virtual Cable Audio", "rate": 44100,
+                "api": "MME"}]
+    assert device_siblings(entries, 5) == []
+    assert device_siblings(entries, 99) == []
 
 class _FakeStream:
     """استریم فیک — دستگاه شکسته/داده‌ی خراب را شبیه‌سازی می‌کند."""

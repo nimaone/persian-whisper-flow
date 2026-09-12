@@ -219,6 +219,29 @@ def resolve_pinned_device(pinned: int | None, key: str | None) -> int | None:
     return pinned
 
 
+def device_siblings(entries: list[dict], index: int) -> list[dict]:
+    """سایر مسیرهای Host API همان میکروفون فیزیکی — مرتب بر اساس اولویت.
+
+    برای fallback: اگر یک مسیر دستگاه باز نشود، مسیرهای دیگر همان
+    میکروفون (مثلاً WASAPI به‌جای WDM-KS) کاندید تست/ضبط‌اند.
+    """
+    def name_key(name: str) -> str:
+        return "".join(ch for ch in name.lower() if ch.isalnum())
+
+    def api_rank(e: dict) -> int:
+        api = e.get("api", "")
+        return HOSTAPI_PREFERENCE.index(api) if api in HOSTAPI_PREFERENCE \
+            else len(HOSTAPI_PREFERENCE)
+
+    target = next((e for e in entries if e["index"] == index), None)
+    if target is None:
+        return []
+    tn = name_key(target["name"])
+    sibs = [e for e in entries if e["index"] != index
+            and SequenceMatcher(None, tn, name_key(e["name"])).ratio() >= 0.6]
+    return sorted(sibs, key=api_rank)
+
+
 def list_input_devices() -> list[dict]:
     out = []
     for i, d in enumerate(sd.query_devices()):

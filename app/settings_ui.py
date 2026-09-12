@@ -16,7 +16,7 @@ import numpy as np
 from app import theme, smooth_ctk
 from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config, set_autostart
 from app.recorder import (Recorder, dedupe_input_devices, detect_best_device,
-                          device_label)
+                          device_label, device_siblings)
 from app.win32 import style_toplevel, smooth_show, disable_min_max
 from app.theme import apply_icon
 
@@ -303,6 +303,7 @@ def open_settings(parent_root, app=None):
     ct = card(t_mic, "تست صدا")
     tester = MicTester()
     var_testing = {"on": False}
+    test_fallbacks: list[dict] = []   # مسیرهای جایگزین همان میکروفون — اگر مسیر اصلی باز نشود
     bars_hist: list[float] = [0.0] * SPECS_BARS
     hist_lock = threading.Lock()
 
@@ -331,6 +332,9 @@ def open_settings(parent_root, app=None):
                 if dev is None:
                     dev = sd.default.device[0]
             tester.start(dev)
+            test_fallbacks.clear()
+            if dev is not None:
+                test_fallbacks.extend(device_siblings(all_inputs, dev))
             test_vals.clear()
             var_testing["on"] = True
             test_btn_var.set("توقف تست")
@@ -353,6 +357,14 @@ def open_settings(parent_root, app=None):
 
     QUALITY_COLORS = {"good": theme.ACCENT, "warn": theme.WARN,
                       "bad": theme.DANGER, "none": theme.FG_DIM}
+
+    def _friendly_audio_error(msg: str) -> str:
+        low = (msg or "").lower()
+        if "unanticipated host error" in low or "error starting stream" in low:
+            return ("این مسیر دستگاه روی این سیستم باز نمی‌شود — اگر میکروفون مجازی "
+                    "است برنامه‌اش را اجرا کن، یا مسیر دیگری (مثلاً WASAPI) همان "
+                    "میکروفون را انتخاب کن")
+        return msg
 
     def update_quality():
         from app.recorder import input_quality
@@ -391,9 +403,19 @@ def open_settings(parent_root, app=None):
                 else:
                     vals.append(v)
             if got_err:
-                verdict_lbl.configure(text=f"خطا: {got_err}", text_color=theme.DANGER)
-                toggle_test()
-                return
+                if test_fallbacks:
+                    # مسیر اصلی/قبلی باز نشد — خودکار روی مسیر دیگر همان میکروفون
+                    nxt = test_fallbacks.pop(0)
+                    verdict_lbl.configure(
+                        text="این مسیر دستگاه باز نشد — تست روی مسیر جایگزین: "
+                             f"{nxt['name'][:40]} ({nxt['api']})",
+                        text_color=theme.WARN)
+                    tester.start(nxt["index"])
+                else:
+                    verdict_lbl.configure(text=f"خطا: {_friendly_audio_error(got_err)}",
+                                          text_color=theme.DANGER)
+                    toggle_test()
+                    return
             if vals:
                 test_vals.extend(vals)
                 if len(test_vals) > 400:
