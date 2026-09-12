@@ -463,7 +463,7 @@ def open_settings(parent_root, app=None):
                   variable=var_enroll, command=_sync_enroll_ui,
                   **switch_style).pack(anchor="e", pady=(0, 6))
     dim(ce, "واژه‌ای که مدل مدام اشتباه می‌شنود را ضبط کن؛ شکل‌های شنیده‌شده را تیک بزن تا در خروجی به واژه‌ی درست تبدیل شوند")
-    dim(ce, "واریانت‌ها برای هر دو حالت متن زنده (عادی و پایدار) برداشت می‌شوند؛ اثر هم روی متن زنده و هم روی متن نهایی دارد")
+    dim(ce, "اثر هم روی متن زنده و هم روی متن نهایی دارد؛ در حالت «متن زنده پایدار» اعمال نمی‌شود")
 
     from app import enroll as enroll_mod
 
@@ -558,40 +558,12 @@ def open_settings(parent_root, app=None):
                 ctk.CTkCheckBox(check_frame, text=f"«{v}»", variable=var,
                                 **check_style).pack(anchor="e", pady=1)
 
-        _extra: dict = {"engine": None, "failed": False}
-
-        def _harvest_engines():
-            """موتور فعال + گویش دیگر دیکد — واریانت‌های هر دو گویش ثبت
-            شوند تا تعویض «متن زنده پایدار» نقضش نکند: پیش‌فرض با sherpa
-            گری‌دی می‌خواند و پایدار با beam-2 و خروجی‌شان ~۳۰٪ توکن فرق دارد.
-            موتور دوم یک‌بار در عمر دیالوگ لود و با بستنش آزاد می‌شود."""
-            from app import asr as _asr
-            from app.config import model_dir
-
-            engs = [app.engine]
-            if _extra["engine"] is None and not _extra["failed"]:
-                try:
-                    if isinstance(app.engine, _asr.DirectCtcAsrEngine):
-                        # فعال = beam-2 — گویش گری‌دی حالت پیش‌فرض را هم بگیر
-                        _extra["engine"] = _asr.load_engine(num_threads=2)
-                    else:
-                        _extra["engine"] = _asr.DirectCtcAsrEngine(
-                            model_dir(), num_threads=2, beam_width=2)
-                except Exception:
-                    _extra["failed"] = True
-            if _extra["engine"] is not None:
-                engs.append(_extra["engine"])
-            return engs
-
         def _decode_worker(slot: int, data, word: str):
             # هیچ دسترسی Tk اینجا ممنوع — word و data از ترد اصلی آمده‌اند
             try:
                 text = str(app.engine.transcribe(data, 16000) or "")
-                variants = []
-                for eng in _harvest_engines():
-                    t = text if eng is app.engine else None
-                    variants.extend(
-                        enroll_mod.harvest_variants(eng, data, word, text=t))
+                variants = enroll_mod.harvest_variants(
+                    app.engine, data, word, text=text)
                 result_q.put(("done", slot, text, variants))
             except Exception as e:
                 result_q.put(("err", slot, str(e)[:60], []))
@@ -739,13 +711,6 @@ def open_settings(parent_root, app=None):
 
         rebuild_checks()
         dlg.after(100, poll_results)
-
-        def _cleanup(_event=None):
-            if _event is not None and _event.widget is not dlg:
-                return
-            _extra["engine"] = None  # موتور دوم گویش — آزادسازی حافظه
-
-        dlg.bind("<Destroy>", _cleanup)
         smooth_show(dlg)  # نمایش نرم بعد از ساخت کامل — ویندوز از قبل مخفی بود
         dlg.grab_set()    # فقط بعد از نمایان‌شدن؛گرنه grab روی پنجره مخفی می‌ماند
 

@@ -353,7 +353,10 @@ class App:
                             text = persian_itn.normalize_text(text, min_tokens=2)
                         if self.cfg.get("rejoin_prefixes"):
                             text = fa_post.rejoin_prefixes(text)
-                        if self._alias_map:
+                        # ثبت صوتی واژه در حالت پایدار اعمال نمی‌شود: گویش
+                        # دیکد beam-2 با گویشی که واریانت‌ها برداشت شده‌اند
+                        # فرق دارد و جایگزینی ناپایدارِ نمایش می‌سازد
+                        if self._alias_map and not self.cfg.get("stable_live"):
                             text = enroll.apply_aliases(text, self._alias_map)
                         self.ui_q.put(("text", text))
                     # توقف خودکار پس از سکوت — فقط اگر قبلاً صدایی شنیده شده
@@ -405,7 +408,8 @@ class App:
             text = persian_itn.normalize_text(text, min_tokens=2)
         if self.cfg.get("rejoin_prefixes"):
             text = fa_post.rejoin_prefixes(text)
-        if self._alias_map:
+        # در حالت پایدار هم اعمال نمی‌شود — هم‌راستا با مسیر زنده
+        if self._alias_map and not self.cfg.get("stable_live"):
             text = enroll.apply_aliases(text, self._alias_map)
         method = self.cfg.get("paste_method")
         restore = bool(self.cfg.get("restore_clipboard"))
