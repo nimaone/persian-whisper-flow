@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import queue
 import threading
-import time
 import tkinter as tk
 
 import customtkinter as ctk
@@ -516,7 +515,7 @@ def open_settings(parent_root, app=None):
                      border_color=theme.BORDER,
                      text_color=theme.FG).pack(fill="x")
 
-        ctk.CTkLabel(body, text="سه بار واضح بگو (هر ضبط ۲ ثانیه):",
+        ctk.CTkLabel(body, text="سه بار واضح بگو — ضبط را شروع کن، بگو، و قطع کن؛ بعد با پخش گوش بده:",
                      font=(fam, 13), text_color=theme.FG,
                      anchor="e").pack(fill="x", pady=(10, 3))
 
@@ -524,13 +523,16 @@ def open_settings(parent_root, app=None):
         var_checks: dict[str, tk.BooleanVar] = {}
         check_frame = ctk.CTkFrame(body, fg_color="transparent")
         check_frame.pack(fill="x", pady=(2, 6))
-        busy = {"slot": -1}
+        slots: list[dict] = []               # per-slot: rec/samples/timer
         status_lbls: list[ctk.CTkLabel] = []
         rec_btns: list[ctk.CTkButton] = []
+        play_btns: list[ctk.CTkButton] = []
+        busy = {"slot": -1}                  # اسلات در حال ضبط
+        playing = {"slot": -1}               # اسلات در حال پخش
         result_q: queue.Queue = queue.Queue()
+        REC_MAX_SEC = 10.0                   # سقف ایمنی — توقف خودکار
 
         engine_ok = app is not None and getattr(app, "engine", None) is not None
-        REC_SEC = 2.0
 
         def rebuild_checks():
             for w in check_frame.winfo_children():
@@ -547,46 +549,98 @@ def open_settings(parent_root, app=None):
                 ctk.CTkCheckBox(check_frame, text=f"«{v}»", variable=var,
                                 **check_style).pack(anchor="e", pady=1)
 
-        def _record_worker(slot: int, dev):
+        def _decode_worker(slot: int, data, word: str):
+            # هیچ دسترسی Tk اینجا ممنوع — word و data از ترد اصلی آمده‌اند
             try:
-                # همان مسیر ضبط دیکته — Recorder با دستگاه حل‌شده‌ی اپ؛
-                # sd.rec/detect_best_device اینجا نه (probe چندثانیه‌ای و
-                # دستگاه‌هایی که در sd.rec داده‌ی خراب می‌دهند)
-                rec = Recorder(device=dev, block_ms=50)
-                rec.start()
-                time.sleep(REC_SEC)
-                rec.stop()
-                data = rec.get_buffer_16k()
                 text = str(app.engine.transcribe(data, 16000) or "")
                 variants = enroll_mod.harvest_variants(
-                    app.engine, data, var_word.get(), text=text)
+                    app.engine, data, word, text=text)
                 result_q.put(("done", slot, text, variants))
             except Exception as e:
                 result_q.put(("err", slot, str(e)[:60], []))
 
-        def record_slot(slot: int):
-            if busy["slot"] >= 0 or not var_word.get().strip():
-                if not var_word.get().strip():
-                    status_lbls[slot].configure(text="اول واژه‌ی درست را بنویس",
-                                                text_color=theme.DANGER)
+        def stop_rec(slot: int):
+            s = slots[slot]
+            if s["timer"] is not None:
+                dlg.after_cancel(s["timer"])
+                s["timer"] = None
+            rec, s["rec"] = s["rec"], None
+            busy["slot"] = -1
+            rec.stop()
+            data = rec.get_buffer_16k()
+            s["samples"] = data
+            rec_btns[slot].configure(
+                text=f"ضبط {'۱۲۳'[slot]}", state="normal",
+                fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3)
+            for j, b in enumerate(rec_btns):
+                if j != slot and slots[j]["rec"] is None:
+                    b.configure(state="normal")
+            if data.size < 0.3 * 16000:
+                status_lbls[slot].configure(
+                    text="ضبط خیلی کوتاه بود — دوباره ضبط کن",
+                    text_color=theme.WARN)
                 return
-            busy["slot"] = slot
-            rec_btns[slot].configure(state="disabled")
-            status_lbls[slot].configure(text="در حال ضبط…", text_color=theme.WARN)
-            # دستگاه باید در ترد اصلی حل شود — خواندن کمبوی CTk از ترد
-            # کارگر خطای «main thread is not in main loop» می‌دهد
+            status_lbls[slot].configure(text="در حال پردازش…",
+                                        text_color=theme.WARN)
+            # word همین‌جا در ترد اصلی خوانده می‌شود — StringVar.get از
+            # ترد کارگر «main thread is not in main loop» می‌دهد
+            word = var_word.get().strip()
+            threading.Thread(target=_decode_worker,
+                             args=(slot, data, word), daemon=True).start()
+
+        def toggle_rec(slot: int):
+            if busy["slot"] == slot:
+                stop_rec(slot)
+                return
+            if busy["slot"] >= 0:
+                return
+            if not var_word.get().strip():
+                status_lbls[slot].configure(text="اول واژه‌ی درست را بنویس",
+                                            text_color=theme.DANGER)
+                return
+            if not engine_ok:
+                status_lbls[slot].configure(
+                    text="موتور تشخیص هنوز بارگذاری نشده",
+                    text_color=theme.DANGER)
+                return
+            # دستگاه در ترد اصلی حل می‌شود — خواندن کمبوی CTk از ترد کارگر خطا می‌دهد
             dev = selected_device()
             if dev is None and app is not None:
                 dev = getattr(app, "device", None)
-            threading.Thread(target=_record_worker,
-                             args=(slot, dev), daemon=True).start()
+            try:
+                rec = Recorder(device=dev, block_ms=50)
+                rec.start()  # همان مسیر ضبط دیکته — سریع و بی‌probe
+            except Exception as e:
+                status_lbls[slot].configure(text=f"خطا: {str(e)[:50]}",
+                                            text_color=theme.DANGER)
+                return
+            busy["slot"] = slot
+            slots[slot]["rec"] = rec
+            rec_btns[slot].configure(
+                text="توقف", fg_color=theme.DANGER, hover_color=theme.DANGER)
+            play_btns[slot].configure(state="disabled")
+            status_lbls[slot].configure(text="در حال ضبط…", text_color=theme.WARN)
+            slots[slot]["timer"] = dlg.after(
+                int(REC_MAX_SEC * 1000), lambda: stop_rec(slot))
+
+        def play_slot(slot: int):
+            import sounddevice as sd
+
+            data = slots[slot]["samples"]
+            if data is None or not data.size:
+                return
+            if playing["slot"] == slot:
+                sd.stop()
+                playing["slot"] = -1
+                return
+            sd.stop()
+            sd.play(data, 16000)
+            playing["slot"] = slot
 
         def poll_results():
             try:
                 while True:
                     kind, slot, payload, variants = result_q.get_nowait()
-                    rec_btns[slot].configure(state="normal")
-                    busy["slot"] = -1
                     if kind == "err":
                         status_lbls[slot].configure(text=f"خطا: {payload}",
                                                     text_color=theme.DANGER)
@@ -604,19 +658,28 @@ def open_settings(parent_root, app=None):
                 dlg.after(100, poll_results)
 
         for i in range(3):
+            slots.append({"rec": None, "samples": None, "timer": None})
             row = ctk.CTkFrame(body, fg_color="transparent")
             row.pack(fill="x", pady=2)
             st = ctk.CTkLabel(row, text="—", font=(fam, 12),
                               text_color=theme.FG_DIM, anchor="e")
             st.pack(side="right", fill="x", expand=True, padx=(6, 0))
+            pbtn = ctk.CTkButton(row, text="پخش", width=60, height=30,
+                                 corner_radius=6, font=(fam, 12),
+                                 fg_color=theme.SURFACE_2,
+                                 hover_color=theme.SURFACE_3,
+                                 text_color=theme.FG, state="disabled",
+                                 command=lambda s=i: play_slot(s))
+            pbtn.pack(side="left", padx=(6, 0))
             btn = ctk.CTkButton(row, text=f"ضبط {'۱۲۳'[i]}", width=80, height=30,
                                 corner_radius=6, font=(fam, 12, "bold"),
                                 fg_color=theme.SURFACE_2,
                                 hover_color=theme.SURFACE_3, text_color=theme.FG,
-                                command=lambda s=i: record_slot(s))
+                                command=lambda s=i: toggle_rec(s))
             btn.pack(side="left")
             status_lbls.append(st)
             rec_btns.append(btn)
+            play_btns.append(pbtn)
         if not engine_ok:
             dim(body, "موتور تشخیص هنوز بارگذاری نشده — بعد از آماده‌شدن اپ دوباره باز کن")
 

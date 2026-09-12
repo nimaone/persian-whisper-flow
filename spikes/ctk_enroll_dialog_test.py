@@ -94,14 +94,21 @@ def main():
             status_lbls = find_status_labels(dlg)
         print("تعداد لیبل وضعیت:", len(status_lbls))
         rec1 = find_widget(dlg, ctk.CTkButton, "ضبط ۱")
-        rec1.invoke()
+        rec1.invoke()  # شروع ضبط — دکمه باید «توقف» شود
+        root.update()
+        time.sleep(0.5)
+        for _ in range(20):
+            root.update()
+            time.sleep(0.03)
+        print("متن دکمه حین ضبط:", rec1.cget("text"))
+        rec1.invoke()  # توقف ضبط — از این‌جا پردازش در ترد کارگر
 
         status = None
-        for _ in range(300):  # حداکثر ~۱۵ ثانیه (ضبط ۲s + دیکد)
+        for _ in range(300):  # حداکثر ~۱۵ ثانیه تا دیکد
             root.update()
             time.sleep(0.03)
             txt = status_lbls[0].cget("text")
-            if txt != "—" and "در حال ضبط" not in txt:
+            if "شنیده شد" in txt or "خطا" in txt or "کوتاه" in txt:
                 status = txt
                 break
         print("وضعیت نهایی ضبط ۱:", status)
