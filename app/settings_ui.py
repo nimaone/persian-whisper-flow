@@ -493,6 +493,12 @@ def open_settings(parent_root, app=None):
             ctk.CTkLabel(row, text=f"«{e['word']}» — {n_var} واریانت تأییدشده",
                          font=(fam, 13), text_color=theme.FG,
                          anchor="e").pack(side="right")
+            ctk.CTkButton(row, text="ویرایش", width=60, height=26,
+                          corner_radius=6, font=(fam, 12),
+                          fg_color=theme.SURFACE_2,
+                          hover_color=theme.SURFACE_3, text_color=theme.FG,
+                          command=lambda wd=e: open_enroll_dialog(wd)
+                          ).pack(side="left", padx=(4, 0))
             ctk.CTkButton(row, text="حذف", width=56, height=26, corner_radius=6,
                           font=(fam, 12), fg_color=theme.SURFACE_2,
                           hover_color=theme.DANGER, text_color=theme.FG,
@@ -500,9 +506,10 @@ def open_settings(parent_root, app=None):
                               enroll_store.remove_entry(wd), _enroll_changed())
                           ).pack(side="left")
 
-    def open_enroll_dialog():
+    def open_enroll_dialog(entry: dict | None = None):
+        """entry=None → ثبت واژه جدید؛ dict → ویرایش همان واژه."""
         dlg = tk.Toplevel(win)
-        dlg.title("ثبت واژه جدید")
+        dlg.title("ویرایش واژه" if entry else "ثبت واژه جدید")
         dlg.geometry("470x430")
         dlg.attributes("-topmost", True)
         dlg.configure(bg=theme.BG)
@@ -519,6 +526,8 @@ def open_settings(parent_root, app=None):
                      font=(fam, 13), text_color=theme.FG,
                      anchor="e").pack(fill="x", pady=(0, 3))
         var_word = tk.StringVar()
+        if entry:
+            var_word.set(str(entry.get("word", "")))
         ctk.CTkEntry(body, textvariable=var_word, font=(fam, 14), height=38,
                      corner_radius=8, fg_color=theme.SURFACE_2,
                      border_color=theme.BORDER,
@@ -528,7 +537,7 @@ def open_settings(parent_root, app=None):
                      font=(fam, 13), text_color=theme.FG,
                      anchor="e").pack(fill="x", pady=(10, 3))
 
-        heard_forms: list[str] = []          # همه‌ی شکل‌های شنیده‌شده
+        heard_forms: list[str] = [str(v) for v in (entry or {}).get("variants", [])]
         var_checks: dict[str, tk.BooleanVar] = {}
         check_frame = ctk.CTkFrame(body, fg_color="transparent")
         check_frame.pack(fill="x", pady=(2, 6))
@@ -729,6 +738,11 @@ def open_settings(parent_root, app=None):
             if len(word) < 2:
                 return
             checked = [v for v, var in var_checks.items() if var.get()]
+            if entry is not None and \
+                    enroll_mod.norm_word(str(entry.get("word", ""))) != \
+                    enroll_mod.norm_word(word):
+                # متن واژه عوض شده — مدخل با نام قبلی حذف شود
+                enroll_store.remove_entry(str(entry.get("word", "")))
             enroll_store.add_entry(word, checked)
             _enroll_changed()
             dlg.destroy()

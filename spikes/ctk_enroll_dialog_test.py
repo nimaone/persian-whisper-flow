@@ -63,6 +63,12 @@ def find_entry(widget):
 
 
 def main():
+    import tempfile
+    from app import enroll as _enroll_mod
+
+    tmp = tempfile.mkdtemp()  # enrollments واقعی کاربر آلوده نشود
+    _enroll_mod.store_path = lambda: Path(tmp) / "enrollments.json"
+
     root = ctk.CTk()
     root.withdraw()
 
@@ -146,7 +152,38 @@ def main():
             time.sleep(0.03)
         print("بعد از قطع، متن دکمه:", pbtn.cget("text"))
         sd.play = orig_play
-        dlg.destroy()
+
+        # --- ذخیره مدخل و سپس جریان ویرایش ---
+        save_btn = find_widget(dlg, ctk.CTkButton, "ذخیره واژه")
+        save_btn.invoke()
+        root.update()
+        edit_btn = find_widget(win, ctk.CTkButton, "ویرایش")
+        print("دکمه ویرایش در لیست:", edit_btn is not None)
+        edit_btn.invoke()
+        for _ in range(30):
+            root.update()
+            time.sleep(0.03)
+        dlg2 = [w for w in win.winfo_children()
+                if isinstance(w, tk.Toplevel)][0]
+        dlg2.geometry("470x430+2600+120")
+        for _ in range(10):
+            root.update()
+            time.sleep(0.03)
+        print("عنوان دیالوگ ویرایش:", dlg2.title())
+        entry2 = find_entry(dlg2)
+        print("واژه پیش‌پرشده:", entry2.get())
+        checks = []
+
+        def _collect_checks(w):
+            for c in w.winfo_children():
+                if isinstance(c, ctk.CTkCheckBox):
+                    checks.append(c)
+                _collect_checks(c)
+
+        _collect_checks(dlg2)
+        print("چک‌باکس واریانت‌های موجود:", len(checks),
+              "| همه تیک‌خورده:", all(c.get() for c in checks))
+        dlg2.destroy()
         win.destroy()
         root.destroy()
 
