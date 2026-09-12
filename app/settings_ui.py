@@ -265,14 +265,55 @@ def open_settings(parent_root, app=None):
                 devices.append((e["index"], device_label(e)))
                 break
 
-    auto_label = "خودکار (پرسیگنال‌ترین)"
+    auto = {"label": "خودکار (پرسیگنال‌ترین)"}
     cur = cfg.get("input_device")
-    current_name = auto_label
+    current_name = auto["label"]
     if cur is not None:
         match = [name for idx, name in devices if idx == cur]
         if match:
             current_name = match[0]
-    dev_values = [auto_label] + [name for _, name in devices]
+
+    def _auto_device_name(dev: int | None) -> str | None:
+        """برچسب میکروفون انتخاب‌شده‌ی حالت خودکار — از فهرست فیزیکی."""
+        if dev is None:
+            return None
+        e = next((x for x in all_inputs if x["index"] == dev), None)
+        return device_label(e) if e else None
+
+    if cur is None:
+        # در حالت خودکار، اسم میکروفونی که تشخیص برگزیده کنار «خودکار» می‌آید
+        found = getattr(app, "device", None) if app is not None else None
+        if found is not None:
+            lbl = _auto_device_name(found)
+            if lbl:
+                auto["label"] = f"خودکار — {lbl}"
+        elif app is not None:
+            # تشخیص پس‌زمینه هنوز تمام نشده — تمام که شد، برچسب زنده به‌روز می‌شود
+            def _bg_detect():
+                try:
+                    dev = detect_best_device()
+                except Exception:
+                    dev = None
+                if dev is None:
+                    return
+
+                def _apply():
+                    if not win.winfo_exists():
+                        return
+                    lbl = _auto_device_name(dev)
+                    if not lbl:
+                        return
+                    auto["label"] = f"خودکار — {lbl}"
+                    vals = [auto["label"]] + [name for _, name in devices]
+                    dev_combo.configure(values=vals)
+                    if dev_combo.get() not in vals:
+                        dev_combo.set(auto["label"])
+
+                win.after(0, _apply)
+
+            threading.Thread(target=_bg_detect, daemon=True).start()
+
+    dev_values = [auto["label"]] + [name for _, name in devices]
     dev_combo = ctk.CTkOptionMenu(cm, values=dev_values, height=36,
                                   dynamic_resizing=False, anchor="e", **menu_style)
     dev_combo.set(current_name)
@@ -282,7 +323,7 @@ def open_settings(parent_root, app=None):
     def selected_device():
         """دستگاه انتخابی در کمبو — None یعنی تشخیص خودکار."""
         v = dev_combo.get()
-        if v == auto_label or not v:
+        if v == auto["label"] or not v:
             return None
         for idx, label in devices:
             if label == v:
@@ -911,7 +952,7 @@ def open_settings(parent_root, app=None):
         var_hotkey.set(data.get("hotkey"))
         prev_hotkey = data.get("hotkey")
         hk_hint.configure(text=HINT_TXT, text_color=theme.FG_DIM)
-        dev_combo.set(auto_label)
+        dev_combo.set(auto["label"])
         var_paste.set(data.get("paste_method"))
         var_commands.set(bool(data.get("voice_commands")))
         var_itn.set(bool(data.get("persian_itn")))
