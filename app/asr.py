@@ -525,6 +525,10 @@ class LiveTranscriber:
         self._candidate_count = 0
         self._memory = _WordMemory()
         self._trimmed_result: AsrHypothesis | None = None
+        # پیشوند قفل‌شده: واژه‌هایی که از پنجره خارج شده‌اند و برای همیشه
+        # در نمایش می‌مانند. `_displayed` متنِ «پنجره‌ی» جاری است (همه‌ی
+        # قوانین قفل روی همان کار می‌کنند)؛ خروجی کاربر = پیشوند + پنجره.
+        self._locked_prefix: list[str] = []
 
     def configure(self, stable_live: bool):
         """حالت متن پایدار را تغییر می‌دهد و وضعیت قبلی را پاک می‌کند."""
@@ -543,6 +547,7 @@ class LiveTranscriber:
         self._candidate = None
         self._candidate_count = 0
         self._memory.reset()
+        self._locked_prefix = []
 
     def _words(self, hyp: AsrHypothesis) -> list[AsrWord]:
         if hyp.words:
@@ -805,7 +810,8 @@ class LiveTranscriber:
             self._candidate_count = 0
             # حافظه با پنجره‌ی تکراری هم به‌روز می‌شود (رأی/رقیب پنجره‌ها)
             self._memory.record(t_start, self._words(result), buf_end)
-            return current
+            return current if not self._locked_prefix \
+                else self._with_prefix(current, t_start, buf_end)
 
         if self._candidate is not None and _same_enough(self._candidate.text, result.text):
             self._candidate_count += 1
@@ -851,16 +857,65 @@ class LiveTranscriber:
         trimmed = getattr(self, "_trimmed_result", None)
         self._trimmed_result = None
         if accepted and trimmed is not None:
+            # انتقال به پیشوند باید پیش از جایگزینی _displayed انجام شود
+            # تا «پنجره‌ی قبلی» درست دیده شود
+            out = self._with_prefix(trimmed, t_start, buf_end)
             self._displayed = trimmed
             self._candidate_count = 0
             self._candidate = None
-            return trimmed
+            return out
         if accepted:
+            out = self._with_prefix(result, t_start, buf_end)
             self._displayed = result
             self._candidate_count = 0
             self._candidate = None
-            return result
-        return current if current is not None else AsrHypothesis("")
+            return out
+        return self._with_prefix(current, t_start, buf_end) \
+            if current is not None else AsrHypothesis("")
+
+    def _with_prefix(
+        self,
+        window_hyp: AsrHypothesis,
+        t_start: float,
+        buf_end: float,
+    ) -> AsrHypothesis:
+        """نمایش کامل کاربر = پیشوند قفل‌شده + متن پنجره‌ی جاری.
+
+        وقتی پنجره اسکرول می‌کند، واژه‌های ابتدای `_displayed` که دیگر
+        در پنجره نیستند به `_locked_prefix` منتقل می‌شوند — نمایش دیگر
+        با اسکرول پنجره «از ته‌رگه می‌ریزد» و کاربر کل دیکته را می‌بیند.
+        واژه‌های پنجره‌ی جاری قابل بازنگری می‌مانند؛ پیشوند دیگر هرگز
+        عوض نمی‌شود.
+        """
+        win_words = self._words(window_hyp) if window_hyp is not None else []
+        keys = [_cmp_key(w.text) for w in win_words]
+        if self._locked_prefix or self._displayed is not None:
+            prev = [_cmp_key(w.text)
+                    for w in self._words(self._displayed)] \
+                if self._displayed is not None else []
+            # واژه‌های ابتدای پنجره‌ی قبلی که در کاندید تازه نیستند:
+            # از پنجره خارج شده‌اند → به پیشوند قفل منتقل شوند.
+            cut = 0
+            for k in prev:
+                if k in keys:
+                    break
+                cut += 1
+            # انتقال فقط با اطمینان از این‌که کاندید ادامه‌ی پنجره‌ی
+            # قبلی است (بقیه‌ی واژه‌ها مشترک‌اند) — وگرنه کاندید بی‌ربط
+            # است و هیچ واژه‌ای قفل نمی‌شود.
+            remaining = prev[cut:]
+            if cut and sum(1 for k in remaining if k in keys) \
+                    >= max(1, len(remaining) // 2):
+                self._locked_prefix.extend(
+                    w.text for w in self._words(self._displayed)[:cut]
+                )
+        text = " ".join(self._locked_prefix + [w.text for w in win_words])
+        return AsrHypothesis(
+            text=text,
+            confidence=window_hyp.confidence if window_hyp is not None else 0.0,
+            margin=window_hyp.margin if window_hyp is not None else 0.0,
+            words=tuple(win_words),
+        )
 
     def _tail_unlocked(
         self,

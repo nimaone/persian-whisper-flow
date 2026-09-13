@@ -198,7 +198,9 @@ def test_live_transcriber_keeps_previous_result_on_identical_text():
     second = live.partial_result(buf)
 
     assert first.text == "متن ثابت"
-    assert second is first
+    # پس از _with_prefix خروجی ممکن است آبجکت نو باشد (پیشوند + پنجره)؛
+    # تضمینِ بهینه‌سازی همان «متن» و «دِکِد نشدن دوباره» است.
+    assert second.text == first.text
     assert engine.previous_texts == [None, "متن ثابت"]
 
 

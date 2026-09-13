@@ -132,7 +132,12 @@ def test_shift_prefix_len_is_fuzzy_on_noisy_scroll():
 
 
 def test_scroll_with_noisy_decode_updates_display():
-    """بعد از اسکرول پنجره، کاندیدِ بدشنیده‌ی هم‌محتوا باید پذیرفته شود."""
+    """بعد از اسکرول پنجره، کاندیدِ بدشنیده‌ی هم‌محتوا باید پذیرفته شود.
+
+    از آزمایش ۲۲ به بعد نمایش حالت پایدار «کل متن» است: واژه‌های
+    خارج‌شده از پنجره در پیشوند قفل‌شده می‌مانند و فقط پنجره‌ی جاری
+    بازنگری می‌شود.
+    """
     live = LiveTranscriber(FakeEngine([
         hyp("الف ب پ ت ث ج چ ح"),
         hyp("ب پ ت ث ج چ ح خ"),   # قبل از اسکرول — حذف ابتدای نمایش نیست
@@ -142,9 +147,9 @@ def test_scroll_with_noisy_decode_updates_display():
     assert live.partial_result(buf, t_offset=11.0).text == "الف ب پ ت ث ج چ ح"
     # هنوز اسکرولی رخ نداده — کاندید کوتاه‌تر نباید نمایش را کوچک کند
     assert live.partial_result(buf, t_offset=12.0).text == "الف ب پ ت ث ج چ ح"
-    # اسکرول واقعی (buf_end=13.5 ≥ 12.8) — همان محتوا با واژه‌ی بدشنیده
+    # اسکرول واقعی (buf_end=13.5 ≥ 12.8) — «الف ب» خارج و قفل شد
     out = live.partial_result(buf, t_offset=13.0)
-    assert out.text == "پ ت س ج چ ح خ ز"
+    assert out.text == "الف ب پ ت س ج چ ح خ ز"
 
 
 def test_first_lock_failure_still_seeds_display_after_hysteresis():
@@ -168,3 +173,37 @@ def test_first_lock_failure_still_seeds_display_after_hysteresis():
     buf = np.zeros(1600, dtype=np.float32)
     assert live.partial_result(buf, t_offset=0.0).text == ""   # تیک اول: رد
     assert live.partial_result(buf, t_offset=1.0).text == "سلام سلام"  # سوپاپ
+
+
+def test_stable_display_keeps_locked_prefix_after_scroll():
+    """با اسکرول پنجره، واژه‌های خارج‌شده به پیشوند قفل‌شده منتقل و در
+    نمایش کامل می‌مانند — نمایش دیگر از ته خالی نمی‌شود (آزمایش ۲۲)."""
+    live = LiveTranscriber(FakeEngine([
+        hyp("الف ب پ ت ث"),
+        hyp("الف ب پ ت ث ج"),          # پیش از اسکرول: رشد
+        hyp("ت ث ج چ ح", confidence=0.85),   # اسکرول: «الف ب پ» بیرون رفت
+        hyp("ث ج چ ح خ", confidence=0.85),   # اسکرول بیشتر
+    ]), stable_live=True)
+    buf = np.zeros(1600, dtype=np.float32)
+    assert live.partial_result(buf, t_offset=11.0).text == "الف ب پ ت ث"
+    assert live.partial_result(buf, t_offset=12.0).text == "الف ب پ ت ث ج"
+    # بعد از اسکرول: پیشوند قفل + پنجره
+    assert live.partial_result(buf, t_offset=13.5).text == "الف ب پ ت ث ج چ ح"
+    assert live.partial_result(buf, t_offset=15.0).text == "الف ب پ ت ث ج چ ح خ"
+
+
+def test_stable_reset_clears_locked_prefix():
+    live = LiveTranscriber(FakeEngine([
+        hyp("الف ب پ ت ث"),
+        hyp("الف ب پ ت ث ج"),
+        hyp("ت ث ج چ ح", confidence=0.85),
+        hyp("شروع تازه"),
+    ]), stable_live=True)
+    buf = np.zeros(1600, dtype=np.float32)
+    live.partial_result(buf, t_offset=11.0)
+    live.partial_result(buf, t_offset=12.0)
+    live.partial_result(buf, t_offset=13.5)
+    assert live._locked_prefix, "پیشوند باید در ضبط بلند قفل شده باشد"
+    live.reset()
+    assert live._locked_prefix == []
+    assert live.partial_result(buf, t_offset=0.0).text == "شروع تازه"
