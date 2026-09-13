@@ -35,6 +35,19 @@ def _cmp_key(text: str) -> str:
     return text.replace(_ZWNJ, "")
 
 
+def _same_enough(a: str, b: str) -> bool:
+    """آیا دو فرضیه «تکرارِ» هم‌اند؟ — شباهت کافی روی کلید نرمال.
+
+    decode پنجره‌های متوالی روی صدای نویزدار هرگز عین هم نمی‌آید؛
+    شمارش تکرارِ دقیق برای سوپاپ hysteresis هرگز فعال نمی‌شد و نمایش
+    فریز می‌شد (آزمایش ۱۹ روی صدای واقعی کاربر).
+    """
+    ka, kb = _cmp_key(a), _cmp_key(b)
+    if ka == kb:
+        return True
+    return SequenceMatcher(None, ka, kb, autojunk=False).ratio() >= 0.85
+
+
 @dataclass(frozen=True)
 class AsrWord:
     """یک واژه‌ی تشخیص‌داده‌شده با امتیاز اطمینان مدل.
@@ -546,7 +559,10 @@ class LiveTranscriber:
     def _shift_prefix_len(old: list[AsrWord], new: list[AsrWord]) -> int | None:
         """اگر پنجره‌ی صدا جلو رفته باشد، چند واژه از ابتدا افتاده است؟
 
-        تطبیق روی کلید نرمال‌شده (بدون نیم‌فاصله) انجام می‌شود.
+        تطبیق روی کلید نرمال‌شده (بدون نیم‌فاصله) انجام می‌شود. تطبیق
+        فازی (نسبت ≥ ۰٫۸): روی صدای نویزدار، decodeِ ناحیه‌ی هم‌پوشان
+        ۱-۲ واژه متفاوت می‌آید و تطبیق دقیق هرگز نمی‌خورد — نمایش
+        ده‌ها ثانیه فریز می‌شد (آزمایش ۱۹ روی صدای واقعی کاربر).
         """
         old_keys = [_cmp_key(w.text) for w in old]
         new_keys = [_cmp_key(w.text) for w in new]
@@ -554,7 +570,13 @@ class LiveTranscriber:
             overlap = min(len(old) - shift, len(new))
             if overlap <= 0:
                 continue
-            if new_keys[:overlap] == old_keys[shift:shift + overlap]:
+            m = SequenceMatcher(
+                None, new_keys[:overlap], old_keys[shift:shift + overlap],
+                autojunk=False,
+            )
+            # هم‌پوشانی کوتاه فقط با تطبیق دقیق؛ بلندتر (≥۳ واژه) با
+            # تحمل ۱-۲ واژه‌ی بدشنیده روی صدای نویزدار
+            if m.ratio() >= (0.8 if overlap >= 3 else 1.0):
                 return shift
         return None
 
@@ -677,13 +699,16 @@ class LiveTranscriber:
 
         # پنجره‌ی ۱۰ ثانیه‌ای جلو رفته و واژه‌های ابتدایی خارج شده‌اند؛
         # این جابه‌جایی طبیعی است و نباید متن را برای همیشه قفل کند.
-        shift = self._shift_prefix_len(cur_words, new_words)
-        if shift is not None:
-            overlap = len(cur_words) - shift
-            tail = new_words[overlap:]
-            if tail and not all(self._word_lockable(w, t_start, buf_end) for w in tail):
-                return False
-            return candidate.confidence >= current.confidence - 0.10
+        # فقط بعد از اسکرول واقعی پنجره — تطبیق فازی بدون اسکرول می‌توانست
+        # نمایش را بی‌دلیل کوچک کند.
+        if buf_end >= self.window_sec + 0.8:
+            shift = self._shift_prefix_len(cur_words, new_words)
+            if shift is not None:
+                overlap = len(cur_words) - shift
+                tail = new_words[overlap:]
+                if tail and not all(self._word_lockable(w, t_start, buf_end) for w in tail):
+                    return False
+                return candidate.confidence >= current.confidence - 0.10
 
         # با هم‌ترازسازی واژه‌ها فقط تغییرهای واقعی را می‌سنجم؛ حذف ابتدای
         # متن به‌خاطر حرکت پنجره و درج دنباله‌ی جدید خطای نوسان نیست.
@@ -782,7 +807,7 @@ class LiveTranscriber:
             self._memory.record(t_start, self._words(result), buf_end)
             return current
 
-        if self._candidate is not None and self._candidate.text == result.text:
+        if self._candidate is not None and _same_enough(self._candidate.text, result.text):
             self._candidate_count += 1
         else:
             self._candidate = result
@@ -814,7 +839,7 @@ class LiveTranscriber:
             )
         else:
             accepted = True
-        if not accepted and current is not None \
+        if not accepted \
                 and self._candidate_count >= self.hysteresis \
                 and result.confidence > 0.0:
             # سوپاپ تکرار: متن دو بار پایدار ماند — ولی واژه‌ی بحث‌برانگیزِ

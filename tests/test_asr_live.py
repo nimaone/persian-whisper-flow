@@ -117,3 +117,54 @@ def test_live_partial_falls_back_to_plain_engine():
 
     live = LiveTranscriber(PlainEngine())
     assert live.partial(np.zeros(1600, dtype=np.float32)) == "متن ساده"
+
+
+def test_shift_prefix_len_is_fuzzy_on_noisy_scroll():
+    """اسکرول پنجره با ۱-۲ واژه‌ی بدشنیده باید هم‌چنان shift را پیدا کند.
+
+    روی صدای نویزدار، decode ناحیه‌ی هم‌پوشان دقیقاً یکسان نمی‌آید؛
+    تطبیق دقیق هرگز نمی‌خورد و نمایش فریز می‌شد (آزمایش ۱۹).
+    """
+    live = LiveTranscriber(FakeEngine([]), stable_live=True)
+    old = [AsrWord(w, 0.9, 0.5) for w in "الف ب پ ت ث ج چ".split()]
+    new = [AsrWord(w, 0.9, 0.5) for w in "پ ت س ج چ ح خ".split()]
+    assert live._shift_prefix_len(old, new) == 2
+
+
+def test_scroll_with_noisy_decode_updates_display():
+    """بعد از اسکرول پنجره، کاندیدِ بدشنیده‌ی هم‌محتوا باید پذیرفته شود."""
+    live = LiveTranscriber(FakeEngine([
+        hyp("الف ب پ ت ث ج چ ح"),
+        hyp("ب پ ت ث ج چ ح خ"),   # قبل از اسکرول — حذف ابتدای نمایش نیست
+        hyp("پ ت س ج چ ح خ ز", confidence=0.8),
+    ]), stable_live=True)
+    buf = np.zeros(1600, dtype=np.float32)
+    assert live.partial_result(buf, t_offset=11.0).text == "الف ب پ ت ث ج چ ح"
+    # هنوز اسکرولی رخ نداده — کاندید کوتاه‌تر نباید نمایش را کوچک کند
+    assert live.partial_result(buf, t_offset=12.0).text == "الف ب پ ت ث ج چ ح"
+    # اسکرول واقعی (buf_end=13.5 ≥ 12.8) — همان محتوا با واژه‌ی بدشنیده
+    out = live.partial_result(buf, t_offset=13.0)
+    assert out.text == "پ ت س ج چ ح خ ز"
+
+
+def test_first_lock_failure_still_seeds_display_after_hysteresis():
+    """اگر قفل اولین فرضیه به‌خاطر واژه‌ی بحث‌برانگیز شکست بخورد، سوپاپ
+    hysteresis باید نمایش را پس از دو تیک پایدار بسازد — وگرنه نمایش
+    برای همیشه خالی می‌ماند (آزمایش ۱۹: kooshiar-live1)."""
+    from app.asr import _cmp_key
+
+    timed = AsrHypothesis(
+        text="سلام سلام",
+        confidence=0.9,
+        margin=0.5,
+        words=(
+            AsrWord("سلام", 0.9, 0.5, start=10, end=15),
+            AsrWord("سلام", 0.9, 0.5, start=16, end=21),
+        ),
+    )
+    live = LiveTranscriber(FakeEngine([timed]), stable_live=True)
+    # حافظه پر از رقیبِ هم‌بازه — قفل اولین فرضیه را رد می‌کند
+    live._memory.observations.append((_cmp_key("دیگر"), 0.8, 2.2))
+    buf = np.zeros(1600, dtype=np.float32)
+    assert live.partial_result(buf, t_offset=0.0).text == ""   # تیک اول: رد
+    assert live.partial_result(buf, t_offset=1.0).text == "سلام سلام"  # سوپاپ
