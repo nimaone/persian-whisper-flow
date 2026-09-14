@@ -557,9 +557,12 @@ def open_settings(parent_root, app=None):
     cs = card(t_adv, "متن زنده پایدار — آزمایشی")
     var_stable_live = tk.BooleanVar(value=bool(cfg.get("stable_live")))
     ctk.CTkSwitch(cs, text="قفل واژه‌های قطعی (رأی بین‌پنجره‌ای + امتیاز اطمینان)",
-                  variable=var_stable_live, **switch_style).pack(anchor="e", pady=(0, 6))
+                  variable=var_stable_live, command=lambda: _sync_enroll_ui(),
+                  **switch_style).pack(anchor="e", pady=(0, 6))
     dim(cs, "واژه فقط وقتی قطعی می‌شود که در پنجره‌های پیاپی پایدار باشد، رقیب هم‌زمان نداشته باشد و از لبه خارج نشده باشد؛ نوسان نمایش کمتر می‌شود")
+    dim(cs, "نمایش زنده = کل متن قفل‌شده + پنجره‌ی جاری؛ واژه‌های هنوز قطعی‌نشده کم‌رنگ‌تر دیده می‌شوند")
     dim(cs, "متن نهایی از مسیر جداگانه ساخته می‌شود و تحت تأثیر نیست؛ خروجی ممکن است کمی با حالت پیش‌فرض متفاوت باشد")
+    dim(cs, "در این حالت اصلاح واژه‌های ثبت‌شده (تب پیشرفته) روی خروجی زنده و نهایی اعمال نمی‌شود")
     dim(cs, "پیش‌فرض خاموش است؛ اگر وسط ضبط تغییرش دهید، بعد از پایان ضبط اعمال می‌شود")
 
     ch_hw = card(t_adv, "واژه‌های حساس (هات‌وورد) — آزمایشی")
@@ -576,14 +579,32 @@ def open_settings(parent_root, app=None):
 
     def _sync_enroll_ui():
         # تعریف قبل از دکمه، ولی بدنه در زمان فراخوانی resolve می‌شود
-        add_btn.configure(state="normal" if var_enroll.get() else "disabled")
+        stable = bool(var_stable_live.get())
+        # در حالت «متن زنده پایدار» این لایه روی خروجی زنده و نهایی اعمال
+        # نمی‌شود (گویش دیکد موتور پایدار با گویش واریانت‌ها فرق دارد)، پس
+        # کلید به‌جای روشن‌بودنِ بی‌اثر، غیرفعال نشان داده می‌شود.
+        sw_enroll.configure(state="disabled" if stable else "normal")
+        add_btn.configure(
+            state="normal" if (var_enroll.get() and not stable) else "disabled"
+        )
+        if stable:
+            lbl_stable_note.pack(fill="x", pady=(0, 4), before=enroll_list)
+        else:
+            lbl_stable_note.pack_forget()
 
     var_enroll = tk.BooleanVar(value=bool(cfg.get("enroll_alias")))
-    ctk.CTkSwitch(ce, text="اصلاح واژه‌های ثبت‌شده در خروجی",
-                  variable=var_enroll, command=_sync_enroll_ui,
-                  **switch_style).pack(anchor="e", pady=(0, 6))
+    sw_enroll = ctk.CTkSwitch(ce, text="اصلاح واژه‌های ثبت‌شده در خروجی",
+                              variable=var_enroll, command=_sync_enroll_ui,
+                              **switch_style)
+    sw_enroll.pack(anchor="e", pady=(0, 6))
     dim(ce, "واژه‌ای که مدل مدام اشتباه می‌شنود را ضبط کن؛ شکل‌های شنیده‌شده را تیک بزن تا در خروجی به واژه‌ی درست تبدیل شوند")
     dim(ce, "اثر هم روی متن زنده و هم روی متن نهایی دارد؛ در حالت «متن زنده پایدار» اعمال نمی‌شود")
+
+    lbl_stable_note = ctk.CTkLabel(
+        ce, text="«متن زنده پایدار» روشن است — تا خاموشش نکنی این لایه روی خروجی زنده و نهایی اعمال نمی‌شود",
+        font=(fam, 12), text_color=theme.WARN, justify="right", anchor="e",
+        wraplength=440,
+    )
 
     from app import enroll as enroll_mod
 
