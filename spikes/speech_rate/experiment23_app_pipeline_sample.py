@@ -10,6 +10,11 @@
 - _insert بجای تایپ در پنجره‌ی فعال، متن را در خروجی جمع می‌کند.
 - UI/tray/hotkey وجود ندارد (headless) — اینها فقط رابط‌اند نه پایپ‌لاین.
 
+اجرا (حالت صریح می‌خواهد، وگرنه هر چه در تنظیمات کاربر است اجرا می‌شود):
+  python experiment23_app_pipeline_sample.py stable   # حالت پایدار (فقط در حافظه)
+  python experiment23_app_pipeline_sample.py plain    # حالت معمولی
+  python experiment23_app_pipeline_sample.py          # تنظیمات واقعی کاربر
+
 سنجه‌ها: متن زنده‌ی هر tick (نمایشی که کاربر می‌دید)، متن نهایی
 (آنچه درج می‌شد)، و WER هر دو نسبت به sample/reference.txt.
 """
@@ -99,7 +104,14 @@ class FakeRecorder:
 def main():
     import app.main as m
 
-    stable = (len(sys.argv) < 2 or sys.argv[1] != "plain")
+    # حالت صریح از خط فرمان — بی‌آرگومان = همان تنظیمات واقعی کاربر.
+    # قبلاً راهی برای روشن‌کردن اجباری حالت پایدار نبود و تست روی
+    # تنظیمات کاربر (خاموش) می‌افتاد و کسی متوجه نمی‌شد.
+    mode = sys.argv[1].strip().lower() if len(sys.argv) > 1 else ""
+    if mode not in ("", "stable", "plain"):
+        print("آرگومان نامعتبر. درست: stable | plain | بدون آرگومان")
+        return
+
     wav, sr = sf.read(Path(__file__).resolve().parent / "sample_video16k.wav",
                       dtype="float32")
     if wav.ndim > 1:
@@ -108,10 +120,10 @@ def main():
     dur = len(wav) / 16000
 
     app = m.App()   # __init__ فقط config/queue — بدون UI
-    if not stable:
-        app.cfg.set("stable_live", False)
-    # حالت پایدار از تنظیمات واقعی کاربر — همان چیزی که production می‌رود
-    print(f"stable_live = {bool(app.cfg.get('stable_live'))} | "
+    if mode:
+        app.cfg.set("stable_live", mode == "stable")   # فقط در حافظه؛ settings.json دست‌نخورده
+    source = "آرگومان خط فرمان" if mode else "تنظیمات کاربر"
+    print(f"stable_live = {bool(app.cfg.get('stable_live'))} ({source}) | "
           f"persian_itn = {bool(app.cfg.get('persian_itn'))} | "
           f"rejoin_prefixes = {bool(app.cfg.get('rejoin_prefixes'))}")
 
@@ -176,6 +188,7 @@ def main():
 
     ref = norm_words(REF.read_text(encoding="utf-8"))
     print(f"\n{'=' * 60}")
+    print(f"حالت: {'پایدار' if app.cfg.get('stable_live') else 'معمولی'} ({source})")
     print(f"تعداد متن‌های زنده‌ی نمایش‌داده‌شده: {len(texts)}")
     if texts:
         print(f"متن زنده‌ی آخر (چیزی که کاربر لحظه‌ی توقف می‌دید):")
