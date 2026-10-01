@@ -593,10 +593,16 @@ class DictationApp:
         env = {**os.environ,
                "DIKTEYAR_DEVICE": str(self.device) if self.device is not None else ""}
         try:
-            self._settings_proc = subprocess.Popen(
-                [sys.executable, "-m", "flet_ui.run", "settings"],
-                cwd=str(_PROJECT_ROOT), env=env,
-            )
+            if getattr(sys, "frozen", False):
+                # در بسته، خودِ exe با آرگومان «settings» بالا میآید —
+                # run.py آرگومان اول را target میخواند؛ «-m» در frozen معنا ندارد
+                self._settings_proc = subprocess.Popen(
+                    [sys.executable, "settings"], env=env)
+            else:
+                self._settings_proc = subprocess.Popen(
+                    [sys.executable, "-m", "flet_ui.run", "settings"],
+                    cwd=str(_PROJECT_ROOT), env=env,
+                )
         except Exception as e:
             # هاتکی معلق نماند — وگرنه میانبر تا ریاستارت اپ مرده است
             # (قرینه‌ی try/except و resume در open_settings نسخه CTk)

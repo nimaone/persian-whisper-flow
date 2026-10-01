@@ -15,12 +15,12 @@ VSVersionInfo(
     StringFileInfo([
       StringTable("040904B0", [
         StringStruct("CompanyName", "DikteYar contributors"),
-        StringStruct("FileDescription", "DikteYar (دیکته‌یار) — Persian offline dictation"),
+        StringStruct("FileDescription", "DikteYar Flet (دیکته‌یار — نسخه فلت) — Persian offline dictation"),
         StringStruct("FileVersion", "1.2.0"),
-        StringStruct("InternalName", "DikteYar"),
+        StringStruct("InternalName", "DikteYarFlet"),
         StringStruct("LegalCopyright", "Apache License 2.0 — model: Apache-2.0 (Shenava Koochik by Reza2kn)"),
-        StringStruct("OriginalFilename", "DikteYar.exe"),
-        StringStruct("ProductName", "DikteYar"),
+        StringStruct("OriginalFilename", "DikteYarFlet.exe"),
+        StringStruct("ProductName", "DikteYarFlet"),
         StringStruct("ProductVersion", "1.2.0"),
       ])
     ]),

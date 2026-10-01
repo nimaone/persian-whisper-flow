@@ -30,7 +30,10 @@ ON_DANGER = "#ffffff"
 
 WARN = "#d9a13c"
 
-_FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+# مسیر assets از هسته — در سورس ریشه پروژه، در بسته PyInstaller داخل
+# _internal (bundle_root)؛ مسیر نسبی __file__ در frozen قابل اعتماد نیست
+from app.paths import bundle_root
+_FONT_DIR = bundle_root() / "assets" / "fonts"
 
 _installed = False
 
