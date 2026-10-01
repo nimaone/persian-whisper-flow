@@ -458,6 +458,7 @@ class SettingsWindow:
         import threading as _th
 
         self._stop_tester()   # هر تستر قبلی خاموش شود
+        self._test_vals = []  # آمار کیفیت از تازه — نه بقایای تست قبلی
         q: _q.Queue = _q.Queue()
         stop = _th.Event()
         self._tester_q = q
@@ -577,6 +578,7 @@ class SettingsWindow:
             return False
         # داده‌ی جدید از میکروفون — حداکثر RMS از همه‌ی بلاک‌های صف
         got_err = None
+        got_data = False
         rms = 0.0
         while True:
             try:
@@ -586,6 +588,7 @@ class SettingsWindow:
             if kind == "err":
                 got_err = v
             else:
+                got_data = True
                 rms = max(rms, v)
         if got_err:
             self._testing = False
@@ -596,14 +599,14 @@ class SettingsWindow:
             self.verdict.color = t.DANGER
             self._safe_update(self.verdict)
             return False
-        # نشانگر کیفیت ورودی — نویز پایه/اوج/SNR زنده حین تست
-        if not hasattr(self, "_test_vals"):
-            self._test_vals = []
-            self._quality_tick = 0
-        self._test_vals.append(rms)
-        del self._test_vals[:-120]
-        self._quality_tick += 1
-        if self._quality_tick % 12 == 0:
+        # نشانگر کیفیت ورودی — فقط نمونه‌های واقعی میکروفون. صفرِ «صف
+        # خالی» نباید جمع شود وگرنه کف نویز صفر و SNR متورم می‌شود و
+        # میکروفون پرنویز «خوب» خوانده میشد (قرینه‌ی انباشت vals در CTk)
+        if got_data:
+            if not hasattr(self, "_test_vals"):
+                self._test_vals = []
+            self._test_vals.append(rms)
+            del self._test_vals[:-400]
             from app.recorder import input_quality
             text, level = input_quality(self._test_vals)
             self.quality_lbl.value = text

@@ -185,6 +185,11 @@ class DictationApp:
                         self._overlay.update_level(arg)
             except queue.Empty:
                 pass
+            except Exception:
+                # یک خطای درون op نباید ترد اوورلی را بیندازد — وگرنه
+                # پنجرهی زنده تا ریاستارت اپ از کار میافتد (قرینه‌ی
+                # try/except دور هر op در _ui_loop نسخه CTk)
+                pass
             try:
                 self._overlay.tick()
             except Exception:
@@ -421,6 +426,8 @@ class DictationApp:
         if self.cfg.get("overlay_enabled"):
             self._ov("show")
         threading.Thread(target=self._partial_loop, daemon=True).start()
+        # موج زنده ۱۰Hz — جدا از حلقه‌ی partial (که ۰٫۸s است)
+        threading.Thread(target=self._level_loop, args=(rec,), daemon=True).start()
 
     def _stop_impl(self):
         rec = self.recorder
@@ -508,8 +515,23 @@ class DictationApp:
                 except Exception:
                     pass
             elapsed = time.perf_counter() - t0
-            self._ov("level", rec.recent_rms() if rec is not None else 0.0)
             time.sleep(max(0.05, PARTIAL_INTERVAL - elapsed))
+
+    def _level_loop(self, rec):
+        """موج زنده‌ی اوورلی — ۱۰Hz مثل حلقه‌ی UI نسخه CTk.
+
+        سطح صدا از حلقه‌ی partial نمی‌آید (هر ~۰٫۸s → موج پرشدار می‌شد)؛
+        این ترد سبک تا وقتی همین ضبط جاریست هر ۱۰۰ms پوش می‌کند و بعد از
+        توقف، صفر — تا موج روی آخرین مقدار یخ نزند.
+        """
+        while self._running and self.recorder is rec \
+                and self.state == STATE_RECORDING:
+            try:
+                self._ov("level", rec.recent_rms())
+            except Exception:
+                pass
+            time.sleep(0.1)
+        self._ov("level", 0.0)
 
     def _finish(self, rec):
         try:

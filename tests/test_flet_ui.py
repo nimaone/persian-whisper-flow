@@ -490,6 +490,44 @@ class TestSettingsWindow(SettingsTestBase):
         self.assertTrue(all(b.height == 3 for b in self.win._bars))
         self.assertEqual(self.win.test_btn.content, "شروع تست")
 
+    def test_quality_ignores_empty_queue_zeros(self):
+        # رگرسیون: صفرِ «صف خالی» در آمار کیفیت جمع نمیشد فقط باید
+        # نمونه‌های واقعی بلاک میکروفون جمع شوند — وگرنه کف نویز صفر و
+        # SNR متورم میشد و میکروفون پرنویز «خوب» خوانده میشد
+        import queue as _q
+        import threading as _th
+        self.win._tester_q = _q.Queue()
+        self.win._tester_stop = _th.Event()
+        self.win._start_tester = lambda: None
+        self.win._testing = True
+        env = [0.0]
+        vals = [0.0] * 48   # تاریخچه‌ی موج (float) — میله‌ها خودشان از این می‌سند
+        # تیک با صف خالی — هیچ نمونه‌ای جمع نشود
+        self.win._tick_once(vals, env)
+        self.assertEqual(getattr(self.win, "_test_vals", []),
+                         [], "صف خالی نباید نمونه‌ی صفر تولید کند")
+        self.assertEqual(self.win.quality_lbl.value, "")
+        # نمونه‌ی واقعی — جمع و کیفیت حساب می‌شود
+        self.win._tester_q.put(("rms", 0.05))
+        self.win._tick_once(vals, env)
+        self.assertEqual(len(self.win._test_vals), 1)
+        self.assertAlmostEqual(self.win._test_vals[0], 0.05)
+        self.assertIn("کیفیت ورودی", self.win.quality_lbl.value)
+
+    def test_quality_window_caps_at_400(self):
+        import queue as _q
+        import threading as _th
+        self.win._tester_q = _q.Queue()
+        self.win._tester_stop = _th.Event()
+        self.win._start_tester = lambda: None
+        self.win._testing = True
+        env = [0.0]
+        vals = [0.0] * 48
+        for _ in range(405):
+            self.win._tester_q.put(("rms", 0.02))
+            self.win._tick_once(vals, env)
+        self.assertEqual(len(self.win._test_vals), 400, "پنجره‌ی کیفیت باید سقف داشته باشد")
+
     def test_tester_tried_chain_is_indices(self):
         # رگرسیون: زنجیره‌ی تست باید ایندکس باشد — استخراج دوباره‌ی
         # e['index'] روی int خطای «'int' object is not subscriptable»

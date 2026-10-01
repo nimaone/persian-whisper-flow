@@ -444,6 +444,76 @@ class EngineRelease(unittest.TestCase):
         self.assertEqual(released, [1])
 
 
+class OverlayLevel(unittest.TestCase):
+    """موج زنده: ۱۰Hz از ترد level و صفر پس از توقف — مثل حلقه UI نسخه CTk."""
+
+    def test_level_loop_pushes_then_zeroes_after_stop(self):
+        app, _, rec, _ = make_app()
+        ops = []
+        app._ov = lambda op, arg=None: ops.append((op, arg))
+        app.state = STATE_RECORDING
+        app.recorder = rec
+        t = threading.Thread(target=app._level_loop, args=(rec,), daemon=True)
+        t.start()
+        time.sleep(0.35)
+        self.assertTrue(any(op == "level" and arg and arg > 0 for op, arg in ops),
+                        "حین ضبط باید سطح واقعی پوش شود")
+        app.recorder = None   # پایان ضبط
+        t.join(timeout=3)
+        self.assertFalse(t.is_alive(), "ترد باید بعد از توقف تمام شود")
+        self.assertEqual(ops[-1], ("level", 0.0), "موج نباید روی آخرین مقدار یخ بزند")
+
+    def test_partial_loop_no_longer_pushes_level(self):
+        # حلقه‌ی partial هر ۰٫۸s پوش میکرد → موج پرشدار؛ حالا جای دیگری است
+        import inspect
+        import flet_ui.backend as B
+        src = inspect.getsource(B.DictationApp._partial_loop)
+        self.assertNotIn('"level"', src)
+
+
+class OverlayLoopResilience(unittest.TestCase):
+    """یک خطای درون op نباید ترد اوورلی را بیندازد (قرینه‌ی CTk)."""
+
+    def test_bad_op_does_not_kill_loop(self):
+        app, _, _, _ = make_app(with_overlay=False)
+        calls = []
+
+        class FakeOverlay:
+            def set_font_size(self, n):
+                calls.append("font")
+
+            def show(self):
+                calls.append("show")
+
+            def hide(self):
+                calls.append("hide")
+
+            def update_text(self, *a):
+                calls.append("text")
+
+            def set_processing(self):
+                calls.append("processing")
+
+            def update_level(self, arg):
+                raise RuntimeError("tk خراب")  # خطای واقعی در op
+
+            def tick(self):
+                pass
+
+        # _overlay_loop خودش Overlay را از app.overlay import می‌کند
+        with mock.patch("app.overlay.Overlay", FakeOverlay):
+            t = threading.Thread(target=app._overlay_loop, daemon=True)
+            t.start()
+            time.sleep(0.15)
+            app._ov_q.put(("level", 0.5))     # op خراب
+            app._ov_q.put(("hide", None))     # op بعدی باید هم برسد
+            time.sleep(0.3)
+            app._running = False
+            t.join(timeout=2)
+        self.assertFalse(t.is_alive(), "ترد نباید از خطای op مرده باشد")
+        self.assertIn("hide", calls, "opهای بعد از خطا باید پردازش شوند")
+
+
 class BackendStartup(unittest.TestCase):
     def test_model_failure_after_3_attempts_sets_error(self):
         win = FakeWin()
