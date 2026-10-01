@@ -517,12 +517,42 @@ def _install_uid_guard():
     tk.Misc.update_idletasks = guarded
 
 
+def _install_scrollbar_flush_guard():
+    """فلاشِ همگامِ چیدمان روی هر دندانه‌ی اسکرول را می‌خواباند — ریشه‌ی
+    لگِ تبهای اسکرولشونده (اندازهگیری زنده: ۶۰-۱۰۰ms گیر برای هر گام).
+
+    CTkScrollbar._draw در انتهایش update_idletasks همگام دارد و در اسکرول
+    روی هر set() صدا زده میشود؛ با یک فریم ~۴۰ ویجتیِ تب پیشرفته، این
+    یعنی فلاش کامل صف چیدمان پنجره در هر دندانه. خنثی‌سازی همیشه‌ای است
+    (نه فقط در طوفان — در اسکرول آهسته هم هر گام «ساکت» حساب میشد) و
+    فقط همین فراخوانی را هدف میگیرد: نقاشی خودِ بوم (itemconfig) فوری
+    میماند، و کارهای معوق را Tk قبل از هر فریم رندر خودش انجام میدهد —
+    یعنی فقط «زودتر از لازم» حذف میشود، نه «نشدن».
+    """
+    from customtkinter.windows.widgets import ctk_scrollbar
+    if getattr(ctk_scrollbar.CTkScrollbar._draw, "_smooth_scroll_guarded", False):
+        return
+    orig = ctk_scrollbar.CTkScrollbar._draw
+
+    def _draw(self, no_color_updates=False):
+        global _uid_depth
+        _uid_depth += 1  # update_idletasksِ داخل _draw بی‌عمل میشود
+        try:
+            orig(self, no_color_updates)
+        finally:
+            _uid_depth -= 1
+
+    _draw._smooth_scroll_guarded = True
+    ctk_scrollbar.CTkScrollbar._draw = _draw
+
+
 def apply() -> None:
     """نصب یک‌باره‌ی وصله روی DrawEngine — قبل از ساخت اولین ویجت."""
     global _applied
     if _applied:
         return
     _install_uid_guard()
+    _install_scrollbar_flush_guard()
     from customtkinter.windows.widgets.core_rendering import CTkCanvas, DrawEngine
 
     patches = {
