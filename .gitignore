@@ -34,3 +34,6 @@ installer/Output/
 output/
 sample/
 spikes/speech_rate/
+
+# کلاینت دسکتاپ فلت برای بیلد — دانلودشده، باندل نمیشود در گیت
+packaging/
