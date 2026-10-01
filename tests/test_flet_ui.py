@@ -690,5 +690,23 @@ class TestSaveValidation(SettingsTestBase):
         self.assertIsNone(w.result)
 
 
+class TestWindowEvents(unittest.TestCase):
+    """نوع رویداد پنجره — flet بسته به نسخه رشته یا WindowEventType می‌دهد."""
+
+    def test_string_type(self):
+        from flet_ui.run import window_event_kind
+        self.assertEqual(window_event_kind(SimpleNamespace(type="close")), "close")
+        self.assertEqual(window_event_kind(SimpleNamespace(type="MINIMIZE")), "minimize")
+
+    def test_enum_type(self):
+        from flet_ui.run import window_event_kind
+        ev = SimpleNamespace(type=SimpleNamespace(value="minimize"))
+        self.assertEqual(window_event_kind(ev), "minimize")
+
+    def test_missing_type(self):
+        from flet_ui.run import window_event_kind
+        self.assertEqual(window_event_kind(SimpleNamespace()), "")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

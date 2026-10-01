@@ -104,6 +104,8 @@ class DictationApp:
         self._alias_map: dict[str, str] = {}  # واژه‌های ثبت‌شده — شکل شنیده → درست
         self.refresh_alias_map()
         self._settings_proc: subprocess.Popen | None = None
+        # آیکون سینی — run.py وصلش می‌کند (در تست‌ها None می‌ماند)
+        self.tray = None
 
         # پنجره زنده (Overlay) — Tk فقط از thread خودش؛ فرمان‌ها با صف
         self._ov_q: queue.Queue = queue.Queue()
@@ -257,6 +259,8 @@ class DictationApp:
             self.win.set_state(state, self.cfg.get("hotkey"))
         except Exception:
             pass  # پنجره بسته شده
+        if self.tray is not None:
+            self.tray.set_state(state)  # tooltip سینی مثل نسخه CTk
 
     def _set_status(self, text: str):
         try:
@@ -271,7 +275,13 @@ class DictationApp:
             pass
 
     def _notify(self, text: str):
-        # معادل tray notify — فعلاً در نوار وضعیت پنجره کنترل
+        """اعلان کاربر — با سینی بالون (مثل CTk)، بدون آن نوار وضعیت."""
+        if self.tray is not None:
+            try:
+                self.tray.notify(text)
+                return
+            except Exception:
+                pass
         self._set_status(text)
 
     # ---------- کلید میانبر ----------
@@ -602,6 +612,17 @@ class DictationApp:
     def quit(self):
         self._running = False
         self._unregister_hotkey()
+        if self.tray is not None:
+            try:
+                self.tray.stop()  # آیکون سینی نباید بعد از خروج بماند
+            except Exception:
+                pass
+        # پنجره‌ی تنظیمات پروسه‌ی جداست — نباید بعد از خروج اپ یتیم بماند
+        if self._settings_proc is not None and self._settings_proc.poll() is None:
+            try:
+                self._settings_proc.terminate()
+            except Exception:
+                pass
         if self.recorder:
             try:
                 self.recorder.stop()

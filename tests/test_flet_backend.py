@@ -346,5 +346,91 @@ class BackendStartup(unittest.TestCase):
         self.assertIn("مدل گم شده", win.errors[0])
 
 
+class FakeTray:
+    """قرینه‌ی Tray فلت — فقط ثبت فراخوانی‌ها."""
+
+    def __init__(self):
+        self.states = []
+        self.notified = []
+        self.stopped = False
+
+    def set_state(self, state):
+        self.states.append(state)
+
+    def notify(self, text):
+        self.notified.append(text)
+
+    def stop(self):
+        self.stopped = True
+
+
+class TrayHooks(unittest.TestCase):
+    """اتصال سینی به بک‌اند — tooltip هر حالت و بالون اعلان (مثل CTk)."""
+
+    def test_state_change_updates_tray_tooltip(self):
+        app, win, _, _ = make_app()
+        app.tray = FakeTray()
+        app._ui_set_state(STATE_RECORDING)
+        self.assertEqual(app.tray.states, [STATE_RECORDING])
+        self.assertEqual(win.states, [STATE_RECORDING])
+
+    def test_notify_prefers_tray_balloon(self):
+        app, win, _, _ = make_app()
+        app.tray = FakeTray()
+        app._notify("میکروفون باز نشد")
+        self.assertEqual(app.tray.notified, ["میکروفون باز نشد"])
+        self.assertEqual(win.statuses, [], "با سینی، نوار وضعیت بازنویسی نمی‌شود")
+
+    def test_notify_falls_back_to_status_without_tray(self):
+        app, win, _, _ = make_app()
+        app._notify("میکروفون باز نشد")
+        self.assertEqual(win.statuses, ["میکروفون باز نشد"])
+
+    def test_broken_tray_falls_back_to_status(self):
+        class BadTray(FakeTray):
+            def notify(self, text):
+                raise RuntimeError("سینی مرده")
+
+        app, win, _, _ = make_app()
+        app.tray = BadTray()
+        app._notify("x")
+        self.assertEqual(win.statuses, ["x"])
+
+    def test_quit_stops_tray(self):
+        app, _, _, _ = make_app()
+        app.tray = FakeTray()
+        app.quit()
+        self.assertTrue(app.tray.stopped)
+
+    def test_quit_terminates_settings_process(self):
+        class FakeProc:
+            def __init__(self):
+                self.terminated = False
+
+            def poll(self):
+                return None  # هنوز باز است
+
+            def terminate(self):
+                self.terminated = True
+
+        app, _, _, _ = make_app()
+        proc = FakeProc()
+        app._settings_proc = proc
+        app.quit()
+        self.assertTrue(proc.terminated, "پنجره‌ی تنظیمات نباید یتیم بماند")
+
+    def test_quit_leaves_finished_settings_process(self):
+        class DoneProc:
+            def poll(self):
+                return 0  # قبلاً بسته شده
+
+            def terminate(self):
+                raise AssertionError("پروسه‌ی بسته نباید terminate شود")
+
+        app, _, _, _ = make_app()
+        app._settings_proc = DoneProc()
+        app.quit()  # نباید استثنا بدهد
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
