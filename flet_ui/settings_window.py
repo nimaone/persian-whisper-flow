@@ -804,7 +804,12 @@ class SettingsWindow:
             self.enroll_stable_note,
             t.dim("اثر هم روی متن زنده و هم روی متن نهایی دارد؛ در حالت «متن زنده پایدار» اعمال نمی‌شود"),
             self.enroll_list,
-            ft.Row([self.enroll_add_btn], alignment=ft.MainAxisAlignment.END),
+            # دکمهها حالا لبه چپاند و نباید به ردیف واژه بچسبند —
+            # قرینهی pady=(6,0) دکمهی add در CTk
+            ft.Container(
+                ft.Row([self.enroll_add_btn], alignment=ft.MainAxisAlignment.END),
+                padding=ft.Padding(left=0, top=8, right=0, bottom=0),
+            ),
         )
         self._enroll_list_card = c_enroll
         self._enroll_dialog = None
