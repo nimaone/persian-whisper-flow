@@ -363,4 +363,6 @@ def input_quality(vals: list[float]) -> tuple[str, str]:
         return f"کیفیت ورودی: خوب — {stats}", "good"
     if snr >= 12:
         return f"کیفیت ورودی: متوسط — {stats}", "warn"
-    return f"کیفیت ورودی: ضعیف — نویز تقریباً هم‌سطح صداست — {stats}", "bad"
+    # حالت ضعیف بدون آمار کامل — جملهی بلند دوخطیِ قبلی کارت تست صدا را
+    # بلند میکرد؛ عدد مفید همین SNR است
+    return f"کیفیت ورودی: ضعیف — نویز تقریباً هم‌سطح صداست (SNR≈{snr:.0f}dB)", "bad"
