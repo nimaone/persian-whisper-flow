@@ -33,3 +33,6 @@ installer/Output/
 # کش‌های پنجره و صدای آزمایش‌های قوانین قفل (بازتولید با experiment*.py)
 spikes/speech_rate/*.pkl
 sample/
+
+# خروجی‌های محلی دمو و اجرا
+output/
