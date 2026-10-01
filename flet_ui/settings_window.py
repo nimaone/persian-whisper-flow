@@ -123,10 +123,11 @@ class SettingsWindow:
 
         # ---------- نوار دکمه‌های ثابت پایین (RTL: اولین = راست‌ترین؛
         # مثل CTk: ذخیره راست، بعد انصراف، بازنشانی چپ) ----------
+        # هر سه دکمه همعرض (۱۱۰) — درخواست کاربر
         btn_bar = ft.Row(
             [
                 ft.Button(
-                    content="ذخیره", on_click=self._save, width=130, height=40,
+                    content="ذخیره", on_click=self._save, width=110, height=40,
                     bgcolor=t.ACCENT, color=t.ON_ACCENT,
                     style=t.btn_style(weight="bold"),
                 ),
@@ -137,7 +138,7 @@ class SettingsWindow:
                 ),
                 ft.Container(expand=True),
                 ft.Button(
-                    content="بازنشانی", on_click=self._reset, width=100, height=40,
+                    content="بازنشانی", on_click=self._reset, width=110, height=40,
                     bgcolor=t.SURFACE_2, color=t.FG,
                     style=t.btn_style(),
                 ),
