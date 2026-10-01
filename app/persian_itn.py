@@ -13,6 +13,9 @@ python-api-examples/persian_itn.py در مخزن k2-fsa/sherpa-onnx (Apache-2.0)
   • اعداد صحیح تا تریلیون با مقیاس‌های «هزار/میلیون/میلیارد/تریلیون»
   • اعشاری با «ممیز» («سه ممیز چهارده» → ۳٫۱۴)
   • پیوند «و» بین جزءها؛ نیم‌فاصله («سی‌وپنج») هم تطبیق می‌شود
+  • «و» فقط وقتی یک عدد می‌سازد که جزء بعدی جای عددیِ کوچک‌تری داشته
+    باشد («صد و بیست» → ۱۲۰)؛ دو عدد مستقل («چهار و پنج») جدا می‌مانند
+    و جمع نمی‌شوند
   • حروف عربی ي/ك به فارسی تبدیل می‌شوند قبل از تطبیق
   • نیم‌فاصلهٔ بقیهٔ متن حفظ می‌شود («می‌روم» دست‌نخورده می‌ماند)
 
@@ -131,6 +134,29 @@ def _parse_group(tokens: list[str], i: int) -> tuple[int, int] | None:
     return (value, used) if saw_part else None
 
 
+# جای عددی هر واژه — برای قاعده‌ی «و» بین جزءها (فقط بزرگ‌تر → کوچک‌تر)
+_PLACE = {**{w: 100 for w in HUNDREDS}, **{w: 10 for w in TENS},
+          **{w: 1 for w in ONES}}
+
+
+def _part_place(tokens: list[str], i: int) -> int:
+    """جای عددیِ جزئی که از tokens[i] شروع می‌شود؛ ۰ یعنی عدد نیست.
+
+    «پنج» → ۱، «سی» → ۱۰، «چهارصد» → ۱۰۰، «سه هزار» → ۱۰۰۰.
+    """
+    if i >= len(tokens):
+        return 0
+    if tokens[i] in SCALES:
+        return SCALES[tokens[i]]
+    g = _parse_group(tokens, i)
+    if g is None:
+        return 0
+    end = i + g[1]
+    if end < len(tokens) and tokens[end] in SCALES:
+        return SCALES[tokens[end]]
+    return _PLACE.get(tokens[i], 0)
+
+
 def _parse_number(tokens: list[str], i: int) -> ParseResult | None:
     """عدد حروفی کامل را از tokens[i] می‌خواند (گروه‌های مقیاس‌دار + اعشار)."""
     total = 0
@@ -138,9 +164,10 @@ def _parse_number(tokens: list[str], i: int) -> ParseResult | None:
     saw_any = False
 
     while True:
-        g = _parse_group(tokens, i + used)
+        start = i + used
+        g = _parse_group(tokens, start)
         gval, gu = g if g is not None else (0, 0)
-        j = i + used + gu
+        j = start + gu
 
         if j < len(tokens) and tokens[j] in SCALES:
             if g is None and not saw_any:
@@ -148,22 +175,23 @@ def _parse_number(tokens: list[str], i: int) -> ParseResult | None:
             elif g is None:
                 break
             total += gval * SCALES[tokens[j]]
-            used += gu + 1
+            used = j + 1 - i
             saw_any = True
         elif g is not None:
             total += gval
-            used += gu
+            used = j - i
             saw_any = True
         else:
             break
 
-        # ادامه با «و» تا جزء عددی بعدی
+        # ادامه با «و» فقط اگر جزء بعدی جای عددیِ کوچک‌تری داشته باشد.
+        # «صد و بیست» (۱۰۰←۱۰) و «هزار و دویست» (۱۰۰۰←۱۰۰) یک عددند، ولی
+        # «چهار و پنج» دو عدد جدا هستند و نباید جمع شوند (۴+۵=۹ غلط بود).
+        place = _part_place(tokens, start)
         j = i + used
         if j < len(tokens) and tokens[j] == "و":
-            nxt = tokens[j + 1] if j + 1 < len(tokens) else None
-            if nxt is not None and (
-                nxt in ONES or nxt in TENS or nxt in HUNDREDS or nxt in SCALES
-            ):
+            nxt_place = _part_place(tokens, j + 1)
+            if 0 < nxt_place < place:
                 used += 1
                 continue
         break

@@ -3,7 +3,13 @@
 فقط دو چیز را نشان می‌دهد: متن در حال تشخیص و یک موج ظریف متصل به سطح
 واقعی میکروفون. هدر (نقطه‌ی ضبط + میان‌بر) فقط هنگام ضبط نمایان است و
 در حالت «در حال تشخیص» کنار می‌رود تا متن نفَس بگیرد. ارتفاع کارت با
-تعداد خطوط متن رشد می‌کند و پایین نمی‌زند.
+تعداد خطوط متن رشد می‌کند و پایین نمی‌زند — ولی از کسری از ارتفاع صفحه
+بیشتر نمی‌شود: سرِ متن قطعی کوتاه و با «…» علامت می‌خورد، چون پنجره‌ی
+جاری (چیزی که کاربر همین حالا می‌گوید) همیشه باید کامل دیده شود.
+
+متن دو تکه است: پیشوند قفل‌شده با رنگ روشن و پنجره‌ی جاری — واژه‌هایی
+که هنوز قطعی نشده‌اند — با رنگ کم‌رنگ، تا کاربر بداند کدام بخش سند
+نهایی و کدام بخش هنوز در حال شکل‌گرفتن است.
 """
 from __future__ import annotations
 
@@ -21,6 +27,29 @@ WAVE_BAR_W = 3
 WAVE_GAP = 3
 WAVE_H = 18
 BODY_W = 440
+MAX_CARD_FRAC = 0.55   # سقف ارتفاع کارت نسبت به ارتفاع صفحه
+CHROME_H = 96          # هدر + موج + پدینگ‌ها — ارتفاع ثابت کارت
+AVG_WORD_CHARS = 6.0   # میانگین طول واژه‌ی فارسی با فاصله
+
+
+def split_display(text: str, provisional_words: int, limit: int) -> tuple[str, str, bool]:
+    """نمایش را به (متن قطعی، پنجره‌ی جاری، بریده‌شده) می‌شکند.
+
+    `provisional_words` = تعداد واژه‌های پایانی که هنوز قطعی نشده‌اند.
+    اگر واژه‌ها از `limit` بیشتر شوند، سرِ متن قطعی کوتاه و با «…»
+    علامت می‌خورد؛ پنجره‌ی جاری هرگز بریده نمی‌شود.
+    """
+    words = text.split()
+    n = max(0, min(int(provisional_words), len(words)))
+    if len(words) <= max(1, limit):
+        return " ".join(words[:len(words) - n]), " ".join(words[len(words) - n:]), False
+    tail = words[len(words) - n:] if n else []
+    keep = limit - len(tail)
+    if keep < 2:  # فقط پنجره‌ی جاری جا می‌شود — متنی برای پیشوند نمانده
+        return "", " ".join(tail), True
+    start = max(0, len(words) - n - (keep - 1))
+    head = ["…"] + words[start:len(words) - n]
+    return " ".join(head), " ".join(tail), True
 
 
 class Overlay:
@@ -71,13 +100,23 @@ class Overlay:
                                  font=(self.fam, 11), text_color=theme.FG_DIM)
         self.hint.pack(side="left")
 
-        # متن زنده
+        # متن زنده — دو تکه: پیشوند قفل‌شده (روشن) + پنجره‌ی جاری (کم‌رنگ)
+        self.text_box = ctk.CTkFrame(self.card, fg_color="transparent")
+        self.text_box.pack(fill="x", padx=PAD, pady=(8, 10))
         self.label = ctk.CTkLabel(
-            self.card, text=" در حال شنیدن… ",
+            self.text_box, text=" در حال شنیدن… ",
             font=(self.fam, 15), text_color=theme.FG,
             justify="right", anchor="e", wraplength=BODY_W,
         )
-        self.label.pack(fill="x", padx=PAD, pady=(8, 10))
+        self.tail = ctk.CTkLabel(
+            self.text_box, text="", font=(self.fam, 15),
+            text_color=theme.FG_DIM, justify="right", anchor="e",
+            wraplength=BODY_W,
+        )
+        self._font_size = 15
+        self._live_text = ""
+        self._live_prov = 0
+        self._render_parts("در حال شنیدن…")
 
         # موج
         self.wave = tk.Canvas(self.card, width=BODY_W, height=WAVE_H + 4,
@@ -92,12 +131,41 @@ class Overlay:
 
     # ---------- مکان‌یابی ----------
     def _reflow(self):
-        """اندازه‌ی کارت را با محتوای فعلی هم‌تراز می‌کند."""
+        """اندازه‌ی کارت را با محتوای فعلی هم‌تراز می‌کند و در صفحه نگه می‌دارد."""
         self.root.update_idletasks()
         w = self.card.winfo_reqwidth() + 2
         h = self.card.winfo_reqheight() + 2
         if (w, h) != (self.root.winfo_width(), self.root.winfo_height()):
             self.root.geometry(f"{w}x{h}")
+        self._clamp_on_screen()
+
+    def _clamp_on_screen(self):
+        """کارت با رشد متن از لبه‌ی پایین/راست صفحه بیرون نزند."""
+        try:
+            x, y = self.root.winfo_x(), self.root.winfo_y()
+            sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        except tk.TclError:
+            return
+        w, h = self.root.winfo_width(), self.root.winfo_height()
+        pos_x = min(max(8, x), max(8, sw - w - 8))
+        pos_y = min(max(8, y), max(8, sh - h - 8))
+        if (pos_x, pos_y) != (x, y):
+            self.root.geometry(f"+{pos_x}+{pos_y}")
+
+    def _max_words(self) -> int:
+        """سقف واژه‌های نمایش — کارت از سقف ارتفاع رد نشود."""
+        size = float(self._font_size)
+        per_line = max(8.0, BODY_W / (0.55 * size))
+        usable = max(60.0, self._max_card_h() - CHROME_H)
+        lines = max(3.0, usable / (1.5 * size))
+        return int(lines * per_line / AVG_WORD_CHARS)
+
+    def _max_card_h(self) -> float:
+        try:
+            screen_h = float(self.root.winfo_screenheight())
+        except tk.TclError:
+            screen_h = 1080.0
+        return min(screen_h * MAX_CARD_FRAC, screen_h - 2 * (PAD + 8))
 
     def place_near_mouse(self):
         try:
@@ -120,7 +188,9 @@ class Overlay:
             self.dot.pack(side="right")
             self.hint.configure(text="همان کلید را دوباره بزن تا درج شود")
             self.header.pack(fill="x", padx=PAD, pady=(10, 0))
-            self._set_text(" در حال شنیدن… ", theme.FG)
+            self._live_text = ""
+            self._live_prov = 0
+            self._render_parts("در حال شنیدن…")
             self.root.deiconify()
             self.place_near_mouse()
             self._visible = True
@@ -135,23 +205,52 @@ class Overlay:
     def visible(self) -> bool:
         return self._visible
 
-    def _set_text(self, text: str, color: str):
-        self.label.configure(text=text, text_color=color)
+    def _render_parts(self, head: str, tail: str = "", head_color: str = theme.FG):
+        """متن قطعی (روشن) و پنجره‌ی جاری (کم‌رنگ) را جدا می‌چیند."""
+        self.label.pack_forget()
+        self.tail.pack_forget()
+        head = head.strip()
+        tail = tail.strip()
+        if head:
+            self.label.configure(text=f" {head} ", text_color=head_color)
+            self.label.pack(fill="x", pady=(0, 2 if tail else 0))
+        if tail:
+            self.tail.configure(text=f" {tail} ")
+            self.tail.pack(fill="x")
+        if not head and not tail:
+            self.label.configure(text=" در حال شنیدن… ", text_color=theme.FG)
+            self.label.pack(fill="x")
         self._reflow()
 
-    def update_text(self, text: str):
-        t = text.strip()
-        self._set_text(f" {t} " if t else " در حال شنیدن… ", theme.FG)
+    def _render_live(self):
+        """نمایش فعلی را با سقف ارتفاع جاری می‌چیند."""
+        if not self._live_text:
+            self._render_parts("")
+            return
+        head, tail, _ = split_display(
+            self._live_text, self._live_prov, self._max_words()
+        )
+        self._render_parts(head, tail)
+
+    def update_text(self, text: str, provisional_words: int = 0):
+        """متن زنده — `provisional_words` واژه‌های پایانیِ هنوز قطعی‌نشده است."""
+        self._live_text = " ".join(text.split())
+        self._live_prov = max(0, int(provisional_words))
+        self._render_live()
 
     def set_processing(self):
         """حالت «در حال تشخیص» — هدر جمع می‌شود تا فقط متن دیده شود."""
         self._recording = False
         self.header.pack_forget()
-        self._set_text(" در حال تشخیص… ", theme.FG_DIM)
+        self._render_parts("در حال تشخیص…", "", theme.FG_DIM)
 
     def set_font_size(self, size: int):
-        """اندازه فونت متن زنده — از تنظیمات (thread اصلی)."""
-        self.label.configure(font=(self.fam, int(size)))
+        """اندازه‌ی فونت متن زنده — از تنظیمات (thread اصلی)."""
+        self._font_size = int(size)
+        font = (self.fam, self._font_size)
+        self.label.configure(font=font)
+        self.tail.configure(font=font)
+        self._render_live()
 
     def update_level(self, rms: float):
         self._level = rms

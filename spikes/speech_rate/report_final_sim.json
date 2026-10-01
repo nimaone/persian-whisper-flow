@@ -1,0 +1,41 @@
+{
+  "err_before": 22989,
+  "err_after_rejoin": 22467,
+  "err_after_alias_runs": [
+    22453,
+    22457,
+    22460,
+    22464,
+    22471
+  ],
+  "err_median": 22460,
+  "reduction_rejoin_pct": 2.3,
+  "reduction_total_pct": 2.3,
+  "runs": [
+    {
+      "run": 0,
+      "n_alias": 25,
+      "err_after": 22457
+    },
+    {
+      "run": 1,
+      "n_alias": 25,
+      "err_after": 22471
+    },
+    {
+      "run": 2,
+      "n_alias": 29,
+      "err_after": 22464
+    },
+    {
+      "run": 3,
+      "n_alias": 30,
+      "err_after": 22460
+    },
+    {
+      "run": 4,
+      "n_alias": 30,
+      "err_after": 22453
+    }
+  ]
+}

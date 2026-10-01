@@ -1,0 +1,83 @@
+{
+  "n_clips": 350,
+  "word_observations": 31595,
+  "bad_pct": 34.7,
+  "auc_signals": {
+    "conf_inv": 0.7258816314310887,
+    "margin_inv": 0.7154960651736111,
+    "votes_inv (ناپایداری)": 0.5698879824251525,
+    "contest": 0.6480107166175061,
+    "d_start_inv (لبه‌ی قدیمی)": 0.53544753827168,
+    "d_end_inv (لبه‌ی زنده)": 0.48116456627747906,
+    "dur_inv": 0.451325434858521,
+    "wpm_local": 0.5204474922677889
+  },
+  "auc_combos": {
+    "conf+votes": 0.7077293775890944,
+    "conf+contest": 0.7319733111496471,
+    "conf+votes+contest": 0.7189006315331105
+  },
+  "per_source_err": {
+    "kooshiar-aug23-p1": 35.1,
+    "kooshiar-aug23-p2": 33.7,
+    "kooshiar-live1": 34.5,
+    "kooshiar-live2": 34.9,
+    "kooshiar-market-ai": 35.4,
+    "kooshiar-market-ai2": 35.7,
+    "kooshiar-war-econ": 34.2
+  },
+  "per_position_err": {
+    "leading_edge": 42.9,
+    "trailing_edge": 37.0,
+    "middle": 32.7
+  },
+  "e1_speech_rate": {
+    "corr_wpm_err": 0.03299940815582393,
+    "corr_wpm_conf": 0.017931352760042832,
+    "auc_wpm": 0.5204474922677889
+  },
+  "rule_table": [
+    {
+      "rule": "فعلی: conf≥0.25",
+      "locked": 31413,
+      "bad": 10817,
+      "bad_pct": 34.4,
+      "coverage": 99.4
+    },
+    {
+      "rule": "votes≥2",
+      "locked": 23342,
+      "bad": 7294,
+      "bad_pct": 31.2,
+      "coverage": 73.9
+    },
+    {
+      "rule": "votes≥3",
+      "locked": 17664,
+      "bad": 5325,
+      "bad_pct": 30.1,
+      "coverage": 55.9
+    },
+    {
+      "rule": "votes≥2 و conf≥0.25",
+      "locked": 23246,
+      "bad": 7215,
+      "bad_pct": 31.0,
+      "coverage": 73.6
+    },
+    {
+      "rule": "contest<0.3 و conf≥0.25",
+      "locked": 25378,
+      "bad": 7213,
+      "bad_pct": 28.4,
+      "coverage": 80.3
+    },
+    {
+      "rule": "conf≥0.25 و d_start≥1s",
+      "locked": 26307,
+      "bad": 8640,
+      "bad_pct": 32.8,
+      "coverage": 83.3
+    }
+  ]
+}

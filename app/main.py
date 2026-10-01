@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import gc
 import queue
 import sys
 import threading
@@ -19,14 +20,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 from PIL import Image, ImageDraw
 
-from app import paths, persian_itn, voice_commands
+from app import enroll, fa_post, paths, persian_itn, voice_commands
 from app import first_run
-from app.asr import LiveTranscriber, load_engine
+from app.asr import DirectCtcAsrEngine, LiveTranscriber, SpeechGate, load_engine
 from app.config import APP_TITLE, Config, model_dir, set_autostart
 from app.control_window import ControlWindow
 from app.overlay import Overlay
 from app.paster import insert_text, send_key
-from app.recorder import Recorder, detect_best_device
+from app.recorder import Recorder, detect_best_device, resolve_pinned_device
 
 STATE_IDLE = "idle"
 STATE_LOADING = "loading"
@@ -36,6 +37,7 @@ STATE_TRANSCRIBING = "transcribing"
 
 PARTIAL_INTERVAL = 0.8  # ثانیه بین ترنسکرایپ‌های زنده
 SILENCE_RMS = 0.003     # آستانه سکوت برای توقف خودکار
+SPEECH_GATE_HANGOVER = 1.5  # ثانیه decode اضافه پس از آخرین صدا
 
 
 def _beep(start: bool):
@@ -45,6 +47,27 @@ def _beep(start: bool):
         winsound.Beep(880 if start else 660, 60)
     except Exception:
         pass
+
+
+def _device_fallback_chain(device: int | None) -> list[int | None]:
+    """زنجیره‌ی تلاش برای باز کردن میکروفون: دستگاه انتخابی → مسیرهای دیگر
+    Host API همان میکروفون فیزیکی → پیش‌فرض سیستم.
+
+    بعضی مسیرها (WDM-KS، میکروفون‌های مجازی بی‌برنامه) باز نمی‌شوند؛
+    شکست یکی نباید دیکته را کلاً از کار بیندازد.
+    """
+    devs: list[int | None] = []
+    if device is not None:
+        devs.append(device)
+        try:
+            from app.recorder import current_input_devices, device_siblings
+            devs.extend(e["index"] for e in
+                        device_siblings(current_input_devices(), device))
+        except Exception:
+            pass
+    if None not in devs:
+        devs.append(None)  # پیش‌فرض سیستم — آخرین جان پناه
+    return list(dict.fromkeys(devs))
 
 
 class App:
@@ -63,7 +86,23 @@ class App:
         self._tray = None
         self._hotkey_registered = ""
         self._silence_t0 = None  # زمان شروع سکوت فعلی (برای توقف خودکار)
+        self._live_tail = 0  # واژه‌های قطعی‌نشده‌ی نمایش زنده (کم‌رنگ در overlay)
         self._engine_dirty = False  # تنظیمات هات‌وورد عوض شده — پس از ضبط rebuild شود
+        self._engine_rebuild_requested = False  # تغییر موتور در UI — بعد از بستن تنظیمات
+        self._alias_map: dict[str, str] = {}  # واژه‌های ثبت‌شده — شکل شنیده → درست
+        self.refresh_alias_map()
+
+    def refresh_alias_map(self):
+        """بازخوانی نگاشت واژه‌های ثبت‌شده از دیسک — بعد از افزودن/حذف در تنظیمات."""
+        try:
+            if self.cfg.get("enroll_alias"):
+                self._alias_map = enroll.build_alias_map(
+                    enroll.EnrollStore.load().active()
+                )
+                return
+        except Exception:
+            pass
+        self._alias_map = {}
 
     # ---------- راه‌اندازی ----------
     def start(self):
@@ -87,7 +126,18 @@ class App:
             words = list(self.cfg.get("hotwords") or [])
         except Exception:
             words = []
-        return [str(w) for w in words if len(str(w).strip()) >= 2]
+        out = [str(w) for w in words if len(str(w).strip()) >= 2]
+        # واژه‌های ثبت‌صوتی هم به تقویت beam search می‌روند تا مدل از
+        # منبع به سمت شکل درست سوق پیدا کند (فقط وقتی هر دو حالت روشن‌اند)
+        if self.cfg.get("hotword_boost") and self.cfg.get("enroll_alias"):
+            try:
+                for e in enroll.EnrollStore.load().active():
+                    w = str(e.get("word", "")).strip()
+                    if len(w) >= 2 and w not in out:
+                        out.append(w)
+            except Exception:
+                pass
+        return out
 
     def _make_engine(self):
         """موتور متناسب با تنظیمات: هات‌وورد (beam) یا عادی (گری‌دی sherpa).
@@ -105,13 +155,26 @@ class App:
                 )
             except Exception as e:
                 self._notify(f"حالت واژه‌های حساس فعال نشد؛ موتور عادی: {str(e)[:60]}")
+        # اگر متن پایدار خواسته شده، به‌جای sherpa + session دوم،
+        # یک session ONNX برای هم transcribe و هم امتیازدهی لود می‌کنیم.
+        if bool(self.cfg.get("stable_live")):
+            try:
+                return DirectCtcAsrEngine(
+                    model_dir=model_dir(),
+                    num_threads=int(self.cfg.get("num_threads") or 4),
+                    beam_width=2,
+                )
+            except Exception as e:
+                self._notify(f"موتور متن پایدار فعال نشد؛ موتور عادی: {str(e)[:60]}")
         return load_engine(num_threads=int(self.cfg.get("num_threads") or 4))
 
     def _load_model(self):
         for attempt in range(3):
             try:
                 self.engine = self._make_engine()
-                self.live = LiveTranscriber(self.engine)
+                self.live = LiveTranscriber(
+                    self.engine, stable_live=bool(self.cfg.get("stable_live"))
+                )
                 with self._state_lock:
                     if self.state in (STATE_LOADING, STATE_STARTING):
                         self.state = STATE_IDLE
@@ -125,10 +188,12 @@ class App:
                 time.sleep(5)
 
     def _detect_device(self):
-        if self.device is not None:
-            self._device_ready.set()
-            return
-        self.device = detect_best_device()
+        # دستگاه پین‌شده با کلید پایدار اعتبارسنجی می‌شود — ایندکس خام
+        # بین بوت‌ها جابه‌جا می‌شود؛ اگر دستگاه پیدا نبود، خودکار
+        resolved = resolve_pinned_device(
+            self.cfg.get("input_device"), self.cfg.get("input_device_key"))
+        self.device = resolved if resolved is not None \
+            else detect_best_device()
         self._device_ready.set()
 
     # ---------- تری ----------
@@ -247,19 +312,40 @@ class App:
         # صبر برای تشخیص میکروفون (معمولاً در استارتاپ تمام شده)
         if not self._device_ready.wait(timeout=8):
             pass  # با دستگاه پیش‌فرض ادامه می‌دهیم
-        rec = Recorder(device=self.device)
-        try:
-            rec.start()
-        except Exception as e:
+        if self.device is None:
+            # تشخیص پس‌زمینه هنوز تمام نشده — همین‌جا حل می‌کنیم
+            try:
+                self.device = detect_best_device()
+            except Exception:
+                self.device = None
+        # زنجیره‌ی جایگزین: شکست یک مسیر نباید دیکته را کلاً بیندازد —
+        # بعضی مسیرها (WDM-KS، میکروفون مجازی بی‌برنامه) باز نمی‌شوند
+        rec = None
+        last_err: Exception | None = None
+        for dev in _device_fallback_chain(self.device):
+            r = Recorder(device=dev)
+            try:
+                r.start()
+                rec = r
+                self.device = dev  # دستگاهی که واقعاً باز شد
+                break
+            except Exception as e:
+                last_err = e
+        if rec is None:
             with self._state_lock:
                 self.state = STATE_IDLE
             self._ui_set_state(STATE_IDLE)
-            self._notify(f"میکروفون باز نشد: {str(e)[:40]}")
+            msg = str(last_err)[:40] if last_err else "دستگاهی باز نشد"
+            self._notify(f"میکروفون باز نشد: {msg}")
             return
         self.recorder = rec
         with self._state_lock:
             self.state = STATE_RECORDING
         self._silence_t0 = None
+        if self.live is not None:
+            # گزینه‌ی متن پایدار در شروع هر ضبط از تنظیمات تازه خوانده می‌شود
+            self.live.configure(bool(self.cfg.get("stable_live")))
+            self.live.reset()
         self._ui_set_state(STATE_RECORDING)
         if self.cfg.get("sound_feedback"):
             _beep(start=True)
@@ -288,6 +374,16 @@ class App:
         """ترنسکرایپ زنده — در thread خودش، نتیجه از طریق صف به UI می‌رود."""
         auto_stop = float(self.cfg.get("auto_stop_sec") or 0)
         speech_seen = False
+        gate = SpeechGate(SILENCE_RMS, hangover=SPEECH_GATE_HANGOVER)
+
+        def post(t: str) -> str:
+            """پس‌پردازش متن زنده — همان چیزی که درج نهایی هم می‌بیند."""
+            if self.cfg.get("persian_itn"):
+                t = persian_itn.normalize_text(t, min_tokens=2)
+            if self.cfg.get("rejoin_prefixes"):
+                t = fa_post.rejoin_prefixes(t)
+            return t
+
         while self._running:
             with self._state_lock:
                 if self.state != STATE_RECORDING:
@@ -297,10 +393,32 @@ class App:
             if rec is not None and self.live is not None:
                 try:
                     buf = rec.get_tail_16k(self.live.window_sec)
-                    text = self.live.partial(buf)
-                    if self.cfg.get("persian_itn"):
-                        text = persian_itn.normalize_text(text, min_tokens=2)
-                    self.ui_q.put(("text", text))
+                    gate_rms = float(np.sqrt(
+                        (buf[-int(0.25 * 16000):].astype(np.float64) ** 2).mean()
+                    )) if buf.size else 0.0
+                    should_decode = gate.should_decode(gate_rms, now=t0)
+                    if should_decode:
+                        res = self.live.partial_result(
+                            buf, t_offset=max(
+                                0.0, rec.duration_sec() - buf.size / 16000.0))
+                        text = post(res.text)
+                        # ثبت صوتی واژه در حالت پایدار اعمال نمی‌شود: گویش
+                        # دیکد beam-2 با گویشی که واریانت‌ها برداشت شده‌اند
+                        # فرق دارد و جایگزینی ناپایدارِ نمایش می‌سازد
+                        if self._alias_map and not self.cfg.get("stable_live"):
+                            text = enroll.apply_aliases(text, self._alias_map)
+                        # دنباله‌ی قطعی‌نشده: واژه‌های پنجره‌ی جاری — overlay
+                        # این‌ها را کم‌رنگ نشان می‌دهد. تا وقتی پیشوندی قفل
+                        # نشده کل نمایش یکدست می‌ماند (چیزی برای مقایسه نیست).
+                        # شمارش بعد از همان پس‌پردازشی است که روی کل متن خورد
+                        # (ITN/rejoin واژه می‌چسبانند و تعداد را جابه‌جا می‌کنند).
+                        tail_n = 0
+                        words = res.text.split()
+                        if 0 < len(res.words) < len(words):
+                            tail_n = len(post(" ".join(
+                                words[-len(res.words):])).split())
+                        self.ui_q.put(("tail", tail_n))
+                        self.ui_q.put(("text", text))
                     # توقف خودکار پس از سکوت — فقط اگر قبلاً صدایی شنیده شده
                     if auto_stop > 0:
                         recent = buf[-int(1.5 * 16000):]
@@ -348,6 +466,11 @@ class App:
     def _insert(self, text: str):
         if self.cfg.get("persian_itn"):
             text = persian_itn.normalize_text(text, min_tokens=2)
+        if self.cfg.get("rejoin_prefixes"):
+            text = fa_post.rejoin_prefixes(text)
+        # در حالت پایدار هم اعمال نمی‌شود — هم‌راستا با مسیر زنده
+        if self._alias_map and not self.cfg.get("stable_live"):
+            text = enroll.apply_aliases(text, self._alias_map)
         method = self.cfg.get("paste_method")
         restore = bool(self.cfg.get("restore_clipboard"))
         if self.cfg.get("voice_commands"):
@@ -371,6 +494,10 @@ class App:
         last_level_t = 0.0
         last_cstate = ""
         while self._running:
+            # اگر تنظیمات موتور عوض شده بود، بعد از بستن پنجره rebuild کن
+            if self._engine_rebuild_requested and self.state == STATE_IDLE:
+                self._engine_rebuild_requested = False
+                threading.Thread(target=self._rebuild_engine, daemon=True).start()
             # ۱) اجرای درخواست‌های threadهای دیگر
             while True:
                 try:
@@ -381,6 +508,7 @@ class App:
                     break
                 try:
                     if op == "show":
+                        self._live_tail = 0
                         self.overlay.show()
                     elif op == "font":
                         self.overlay.set_font_size(arg)
@@ -390,8 +518,11 @@ class App:
                         self.overlay.hide()
                     elif op == "processing":
                         self.overlay.set_processing()
+                    elif op == "tail":
+                        # تعداد واژه‌های قطعی‌نشده — همیشه پیش از متن می‌رسد
+                        self._live_tail = int(arg or 0)
                     elif op == "text":
-                        self.overlay.update_text(arg)
+                        self.overlay.update_text(arg, self._live_tail)
                     elif op == "settings":
                         self._open_settings_ui()
                     elif op == "cstate":
@@ -430,13 +561,28 @@ class App:
     def _open_settings_ui(self):
         from app.settings_ui import open_settings
 
-        open_settings(self.overlay.root, self)
+        try:
+            open_settings(self.overlay.root, self)
+        except Exception as e:
+            # بازشدن ناقص تنظیمات نباید میانبر را برای همیشه معلق بگذارد —
+            # open_settings ابتدا suspend می‌کند؛ اگر ساخت وسط راه شکست بخورد
+            # هیچ close()ای برای resume اجرا نمی‌شود
+            self._notify(f"تنظیمات باز نشد: {str(e)[:50]}")
+            try:
+                self.apply_hotkey()
+            except Exception:
+                pass
+        finally:
+            # اشیاء Tkinter پنجره تنظیمات را در thread اصلی collect کن،
+            # تا GC داخل thread rebuild به Tcl دست نزند.
+            gc.collect()
 
     def apply_config(self):
         """بعد از ذخیره‌ی تنظیمات — hotkey و autostart را اعمال کن."""
         old_key = self._engine_key  # قبل از خواندن تنظیمات جدید
         # پنجره تنظیمات کپی خودش را روی دیسک می‌نویسد؛ تنظیمات تازه باید از دیسک خوانده شود
         self.cfg = Config.load()
+        self.refresh_alias_map()
         new_key = self._engine_key
         self.apply_hotkey()
         set_autostart(bool(self.cfg.get("autostart")))
@@ -447,20 +593,35 @@ class App:
             self._device_ready.clear()
             threading.Thread(target=self._detect_device, daemon=True).start()
         else:
-            self.device = int(dev)
-            self._device_ready.set()
-        # تغییر حالت/لیست هات‌وورد → موتور باید عوض شود؛ وسط ضبط ممنوع، بعداً در _finish
+            resolved = resolve_pinned_device(
+                int(dev), self.cfg.get("input_device_key"))
+            if resolved is None:
+                # دستگاه پین‌شده دیگر موجود نیست — تشخیص خودکار
+                self.device = None
+                self._device_ready.clear()
+                threading.Thread(target=self._detect_device, daemon=True).start()
+            else:
+                self.device = resolved
+                self._device_ready.set()
+        # تغییر حالت/لیست هات‌وورد یا موتور متن پایدار → موتور باید عوض شود؛
+        # وسط ضبط ممنوع، بعداً در _finish
         if new_key != old_key and self.state in (STATE_RECORDING, STATE_TRANSCRIBING):
             self._engine_dirty = True
         elif new_key != old_key and self.live is not None:
-            threading.Thread(target=self._rebuild_engine, daemon=True).start()
+            # rebuild را همان‌جا start نمی‌کنیم؛ اول پنجره تنظیمات بسته و
+            # اشیاء Tkinter آن در thread اصلی collect شوند.
+            self._engine_rebuild_requested = True
         # پنجره کنترل hint کلید میانبر را تازه کند
         self._ui_set_state(self.state)
 
     @property
     def _engine_key(self):
         """امضای تنظیماتی که نوع موتور را تعیین می‌کند."""
-        return (bool(self.cfg.get("hotword_boost")), tuple(self._hotwords()))
+        return (
+            bool(self.cfg.get("hotword_boost")),
+            tuple(self._hotwords()),
+            bool(self.cfg.get("stable_live")),
+        )
 
     def _rebuild_engine(self):
         """تعویض موتور در thread پس‌زمینه — مثل استارتاپ: LOADING → IDLE."""
@@ -471,22 +632,38 @@ class App:
             if self.state not in (STATE_IDLE,):
                 return  # در حال لود اولیه — دست نزنیم
             self.state = STATE_LOADING
+        old_engine = self.engine
         self._ui_set_state(self.state)
         try:
             engine = self._make_engine()
-            live = LiveTranscriber(engine)
+            live = LiveTranscriber(
+                engine, stable_live=bool(self.cfg.get("stable_live"))
+            )
         except Exception:
+            # اگر موتور جدید ساخته نشد، موتور قبلی قابل استفاده بماند
+            with self._state_lock:
+                self.state = STATE_IDLE if self.engine is not None else STATE_LOADING
             self._ui_set_state(self.state)
             return
         self.engine = engine
         self.live = live
         self._engine_dirty = False
+        if old_engine is not None and old_engine is not engine:
+            try:
+                old_engine.release_detail_decoder()
+            except Exception:
+                pass
         with self._state_lock:
             self.state = STATE_IDLE
         self._ui_set_state(self.state)
 
     def quit(self):
         self._running = False
+        if self.engine is not None and hasattr(self.engine, "release_detail_decoder"):
+            try:
+                self.engine.release_detail_decoder()
+            except Exception:
+                pass
         if self.recorder:
             try:
                 self.recorder.stop()

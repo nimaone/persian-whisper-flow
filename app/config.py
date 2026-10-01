@@ -17,7 +17,10 @@ DEFAULTS = {
     "paste_method": "clipboard",  # clipboard | type
     "voice_commands": True,
     "persian_itn": True,         # تبدیل اعداد حروفی به رقم («بیست و سه» → ۲۳)
+    "rejoin_prefixes": True,     # چسباندن «می/نمیِ» تنها به واژه بعدی («می کنم» → «میکنم»)
+    "enroll_alias": True,        # نگاشت واژه‌های ثبت‌صوتی روی خروجی (فایل enrollments.json)
     "input_device": None,  # None = تشخیص خودکار
+    "input_device_key": None,  # کلید پایدار دستگاه پین‌شده (نام — API) — ایندکس خام بین بوت‌ها ناپایدار است
     "autostart": False,
     "overlay_enabled": True,
     "num_threads": 4,
@@ -27,6 +30,7 @@ DEFAULTS = {
     "auto_stop_sec": 0,          # توقف خودکار پس از N ثانیه سکوت (0 = خاموش)
     "hotword_boost": False,      # حالت آزمایشی: beam search + تقویت واژه‌های حساس
     "hotwords": [],              # لیست واژه‌های حساس — هر خط یک واژه در تنظیمات
+    "stable_live": False,        # متن زنده پایدار: امتیاز اطمینان + پیشوند قفل‌شده (آزمایشی)
 }
 
 

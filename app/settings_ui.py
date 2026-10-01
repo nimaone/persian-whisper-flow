@@ -15,7 +15,8 @@ import numpy as np
 
 from app import theme, smooth_ctk
 from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config, set_autostart
-from app.recorder import detect_best_device
+from app.recorder import (Recorder, dedupe_input_devices, detect_best_device,
+                          device_label, device_siblings)
 from app.win32 import style_toplevel, smooth_show, disable_min_max
 from app.theme import apply_icon
 
@@ -245,19 +246,82 @@ def open_settings(parent_root, app=None):
     import sounddevice as sd
 
     cm = card(t_mic, "دستگاه ورودی")
-    devices = []
+    # یک مدخل برای هر میکروفون فیزیکی — ویندوز هر دستگاه را به ازای هر
+    # Host API یک بار فهرست می‌کند (۳ میکروفون → ۱۵+ مدخل پرتکرار)
+    all_inputs = []
     for i, d in enumerate(sd.query_devices()):
         if d["max_input_channels"] > 0:
-            devices.append((i, f"[{i}] {d['name']}"))
+            all_inputs.append({"index": i, "name": d["name"],
+                               "rate": int(d["default_samplerate"]),
+                               "api": sd.query_hostapis(d["hostapi"])["name"]})
+    devices = [(d["index"], device_label(d))
+               for d in dedupe_input_devices(all_inputs)]
+    # اگر دستگاه پین‌شده‌ی فعلی در فهرست یکدست نیامد (API کم‌ترجیح)، برای
+    # دیده‌شدن انتخاب فعلی اضافه شود
+    cur_pin = cfg.get("input_device")
+    if cur_pin is not None and cur_pin not in (idx for idx, _ in devices):
+        for e in all_inputs:
+            if e["index"] == cur_pin:
+                devices.append((e["index"], device_label(e)))
+                break
 
-    auto_label = "خودکار (پرسیگنال‌ترین)"
+    auto = {"label": "خودکار (پرسیگنال‌ترین)"}
     cur = cfg.get("input_device")
-    current_name = auto_label
+    current_name = auto["label"]
     if cur is not None:
         match = [name for idx, name in devices if idx == cur]
         if match:
             current_name = match[0]
-    dev_values = [auto_label] + [name for _, name in devices]
+
+    def _auto_device_name(dev: int | None) -> str | None:
+        """برچسب میکروفون انتخاب‌شده‌ی حالت خودکار — از فهرست فیزیکی."""
+        if dev is None:
+            return None
+        e = next((x for x in all_inputs if x["index"] == dev), None)
+        return device_label(e) if e else None
+
+    if cur is None:
+        # در حالت خودکار، اسم میکروفونی که تشخیص برگزیده کنار «خودکار» می‌آید
+        found = getattr(app, "device", None) if app is not None else None
+        if found is not None:
+            lbl = _auto_device_name(found)
+            if lbl:
+                auto["label"] = f"خودکار — {lbl}"
+        elif app is not None:
+            # تشخیص پس‌زمینه هنوز تمام نشده — تمام که شد، برچسب زنده به‌روز می‌شود.
+            # ترد فقط محاسبه می‌کند و نتیجه را در holder می‌گذارد؛ هر فراخوانی
+            # Tk (win.after/...) باید از ترد اصلی باشد وگرنه
+            # «main thread is not in main loop»
+            holder = {"dev": None, "done": False}
+
+            def _bg_detect():
+                try:
+                    holder["dev"] = detect_best_device()
+                except Exception:
+                    holder["dev"] = None
+                finally:
+                    holder["done"] = True
+
+            threading.Thread(target=_bg_detect, daemon=True).start()
+
+            def _apply_auto_label():
+                if not win.winfo_exists():
+                    return
+                if not holder["done"]:
+                    win.after(400, _apply_auto_label)
+                    return
+                lbl = _auto_device_name(holder["dev"])
+                if not lbl:
+                    return
+                auto["label"] = f"خودکار — {lbl}"
+                vals = [auto["label"]] + [name for _, name in devices]
+                dev_combo.configure(values=vals)
+                if dev_combo.get() not in vals:
+                    dev_combo.set(auto["label"])
+
+            win.after(400, _apply_auto_label)
+
+    dev_values = [auto["label"]] + [name for _, name in devices]
     dev_combo = ctk.CTkOptionMenu(cm, values=dev_values, height=36,
                                   dynamic_resizing=False, anchor="e", **menu_style)
     dev_combo.set(current_name)
@@ -267,16 +331,28 @@ def open_settings(parent_root, app=None):
     def selected_device():
         """دستگاه انتخابی در کمبو — None یعنی تشخیص خودکار."""
         v = dev_combo.get()
-        if v == auto_label or not v:
+        if v == auto["label"] or not v:
             return None
-        try:
-            return int(v.split("]")[0][1:])
-        except Exception:
+        for idx, label in devices:
+            if label == v:
+                return idx
+        return None
+
+    def selected_device_key():
+        """کلید پایدار انتخاب فعلی (نام — API) — برای بازیابی بعد از
+        جابه‌جایی ایندکس‌ها بین بوت‌ها."""
+        idx = selected_device()
+        if idx is None:
             return None
+        for i, label in devices:
+            if i == idx:
+                return label
+        return None
 
     ct = card(t_mic, "تست صدا")
     tester = MicTester()
     var_testing = {"on": False}
+    test_fallbacks: list[dict] = []   # مسیرهای جایگزین همان میکروفون — اگر مسیر اصلی باز نشود
     bars_hist: list[float] = [0.0] * SPECS_BARS
     hist_lock = threading.Lock()
 
@@ -292,15 +368,23 @@ def open_settings(parent_root, app=None):
             tester.stop()
             test_btn_var.set("شروع تست")
             spec_canvas.delete("all")
+            quality_lbl.configure(text="", text_color=theme.FG_DIM)
         else:
             dev = selected_device()
             if dev is None:
-                # همان دستگاهی که دیکته استفاده می‌کند — پیش‌فرض سیستم
-                # روی خیلی از سیستم‌ها دستگاهی ساکت است و تست بی‌اثر می‌شود
-                dev = detect_best_device()
+                # «خودکار» = همان دستگاهی که دیکته استفاده می‌کند؛
+                # probe دوباره نه — نتایج detect ناپایدار است و ممکن است
+                # به دستگاهی بیفتد که استریم باز نمی‌کند (بدون اسپاک)
+                dev = getattr(app, "device", None) if app is not None else None
+                if dev is None:
+                    dev = detect_best_device()
                 if dev is None:
                     dev = sd.default.device[0]
             tester.start(dev)
+            test_fallbacks.clear()
+            if dev is not None:
+                test_fallbacks.extend(device_siblings(all_inputs, dev))
+            test_vals.clear()
             var_testing["on"] = True
             test_btn_var.set("توقف تست")
             poll_spec()
@@ -313,6 +397,28 @@ def open_settings(parent_root, app=None):
     verdict_lbl = ctk.CTkLabel(ct, text="", font=(fam, 13, "bold"),
                                text_color=theme.FG, anchor="e")
     verdict_lbl.pack(fill="x")
+    # نشانگر کیفیت ورودی — نویز پایه/اوج/SNR زنده حین تست
+    test_vals: list[float] = []
+    quality_lbl = ctk.CTkLabel(ct, text="", font=(fam, 12),
+                               text_color=theme.FG_DIM, anchor="e",
+                               wraplength=440, justify="right")
+    quality_lbl.pack(fill="x")
+
+    QUALITY_COLORS = {"good": theme.ACCENT, "warn": theme.WARN,
+                      "bad": theme.DANGER, "none": theme.FG_DIM}
+
+    def _friendly_audio_error(msg: str) -> str:
+        low = (msg or "").lower()
+        if "unanticipated host error" in low or "error starting stream" in low:
+            return ("این مسیر دستگاه روی این سیستم باز نمی‌شود — اگر میکروفون مجازی "
+                    "است برنامه‌اش را اجرا کن، یا مسیر دیگری (مثلاً WASAPI) همان "
+                    "میکروفون را انتخاب کن")
+        return msg
+
+    def update_quality():
+        from app.recorder import input_quality
+        text, level = input_quality(test_vals)
+        quality_lbl.configure(text=text, text_color=QUALITY_COLORS.get(level, theme.FG_DIM))
 
     # --- کارت رفتار ضبط ---
     cr = card(t_mic, "رفتار ضبط")
@@ -346,10 +452,24 @@ def open_settings(parent_root, app=None):
                 else:
                     vals.append(v)
             if got_err:
-                verdict_lbl.configure(text=f"خطا: {got_err}", text_color=theme.DANGER)
-                toggle_test()
-                return
+                if test_fallbacks:
+                    # مسیر اصلی/قبلی باز نشد — خودکار روی مسیر دیگر همان میکروفون
+                    nxt = test_fallbacks.pop(0)
+                    verdict_lbl.configure(
+                        text="این مسیر دستگاه باز نشد — تست روی مسیر جایگزین: "
+                             f"{nxt['name'][:40]} ({nxt['api']})",
+                        text_color=theme.WARN)
+                    tester.start(nxt["index"])
+                else:
+                    verdict_lbl.configure(text=f"خطا: {_friendly_audio_error(got_err)}",
+                                          text_color=theme.DANGER)
+                    toggle_test()
+                    return
             if vals:
+                test_vals.extend(vals)
+                if len(test_vals) > 400:
+                    del test_vals[:-400]
+                update_quality()
                 rms = max(vals)
                 norm = min(1.0, rms / 0.04)
                 with hist_lock:
@@ -416,8 +536,14 @@ def open_settings(parent_root, app=None):
                   **switch_style).pack(anchor="e", pady=(8, 0))
     dim(cv2, "اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ اعداد تکی مثل «یک» حروفی می‌مانند")
 
-    # ================= تب پیشرفته =================
+    # ================= تب پیشرفته (اسکرول‌شونده — محتوای بلند) =================
     t_adv = tabview.tab("پیشرفته")
+    t_adv = ctk.CTkScrollableFrame(
+        t_adv, fg_color="transparent", scrollbar_fg_color="transparent",
+        scrollbar_button_color=theme.SURFACE_3,
+        scrollbar_button_hover_color=theme.SURFACE_2,
+    )
+    t_adv.pack(fill="both", expand=True)
 
     ca = card(t_adv, "پردازش")
     arow = ctk.CTkFrame(ca, fg_color="transparent")
@@ -428,6 +554,17 @@ def open_settings(parent_root, app=None):
     ctk.CTkOptionMenu(arow, values=[str(i) for i in range(1, 9)], variable=var_threads,
                       width=80, height=34, **menu_style).pack(side="left")
 
+    cs = card(t_adv, "متن زنده پایدار — آزمایشی")
+    var_stable_live = tk.BooleanVar(value=bool(cfg.get("stable_live")))
+    ctk.CTkSwitch(cs, text="قفل واژه‌های قطعی (رأی بین‌پنجره‌ای + امتیاز اطمینان)",
+                  variable=var_stable_live, command=lambda: _sync_enroll_ui(),
+                  **switch_style).pack(anchor="e", pady=(0, 6))
+    dim(cs, "واژه فقط وقتی قطعی می‌شود که در پنجره‌های پیاپی پایدار باشد، رقیب هم‌زمان نداشته باشد و از لبه خارج نشده باشد؛ نوسان نمایش کمتر می‌شود")
+    dim(cs, "نمایش زنده = کل متن قفل‌شده + پنجره‌ی جاری؛ واژه‌های هنوز قطعی‌نشده کم‌رنگ‌تر دیده می‌شوند")
+    dim(cs, "متن نهایی از مسیر جداگانه ساخته می‌شود و تحت تأثیر نیست؛ خروجی ممکن است کمی با حالت پیش‌فرض متفاوت باشد")
+    dim(cs, "در این حالت اصلاح واژه‌های ثبت‌شده (تب پیشرفته) روی خروجی زنده و نهایی اعمال نمی‌شود")
+    dim(cs, "پیش‌فرض خاموش است؛ اگر وسط ضبط تغییرش دهید، بعد از پایان ضبط اعمال می‌شود")
+
     ch_hw = card(t_adv, "واژه‌های حساس (هات‌وورد) — آزمایشی")
     var_hotword = tk.BooleanVar(value=bool(cfg.get("hotword_boost")))
     ctk.CTkSwitch(ch_hw, text="تقویت واژه‌های مشخص هنگام تشخیص",
@@ -437,6 +574,366 @@ def open_settings(parent_root, app=None):
     txt_hotwords.insert("1.0", "\n".join(str(w) for w in (cfg.get("hotwords") or [])))
     dim(ch_hw, "هر خط یک واژه، حداقل ۲ حرف — اسم‌ها و برندهایی که مدل مدام اشتباه می‌گیرد")
     dim(ch_hw, "با روشن‌کردن، پردازش کمی کندتر می‌شود و ممکن است نشانه‌های پایانی جمله (مثل نقطه) هم درج شوند")
+
+    ce = card(t_adv, "ثبت صوتی واژه‌ها — آزمایشی")
+
+    def _sync_enroll_ui():
+        # تعریف قبل از دکمه، ولی بدنه در زمان فراخوانی resolve می‌شود
+        stable = bool(var_stable_live.get())
+        # در حالت «متن زنده پایدار» این لایه روی خروجی زنده و نهایی اعمال
+        # نمی‌شود (گویش دیکد موتور پایدار با گویش واریانت‌ها فرق دارد)، پس
+        # کلید به‌جای روشن‌بودنِ بی‌اثر، غیرفعال نشان داده می‌شود.
+        sw_enroll.configure(state="disabled" if stable else "normal")
+        add_btn.configure(
+            state="normal" if (var_enroll.get() and not stable) else "disabled"
+        )
+        if stable:
+            lbl_stable_note.pack(fill="x", pady=(0, 4), before=enroll_list)
+        else:
+            lbl_stable_note.pack_forget()
+
+    var_enroll = tk.BooleanVar(value=bool(cfg.get("enroll_alias")))
+    sw_enroll = ctk.CTkSwitch(ce, text="اصلاح واژه‌های ثبت‌شده در خروجی",
+                              variable=var_enroll, command=_sync_enroll_ui,
+                              **switch_style)
+    sw_enroll.pack(anchor="e", pady=(0, 6))
+    dim(ce, "واژه‌ای که مدل مدام اشتباه می‌شنود را ضبط کن؛ شکل‌های شنیده‌شده را تیک بزن تا در خروجی به واژه‌ی درست تبدیل شوند")
+    dim(ce, "اثر هم روی متن زنده و هم روی متن نهایی دارد؛ در حالت «متن زنده پایدار» اعمال نمی‌شود")
+
+    lbl_stable_note = ctk.CTkLabel(
+        ce, text="«متن زنده پایدار» روشن است — تا خاموشش نکنی این لایه روی خروجی زنده و نهایی اعمال نمی‌شود",
+        font=(fam, 12), text_color=theme.WARN, justify="right", anchor="e",
+        wraplength=440,
+    )
+
+    from app import enroll as enroll_mod
+
+    enroll_store = enroll_mod.EnrollStore.load()
+    enroll_list = ctk.CTkFrame(ce, fg_color="transparent")
+    enroll_list.pack(fill="x")
+
+    def _enroll_changed():
+        enroll_store.save()
+        if app is not None:
+            try:
+                app.refresh_alias_map()
+            except Exception:
+                pass
+        rebuild_enroll_list()
+
+    def rebuild_enroll_list():
+        for w in enroll_list.winfo_children():
+            w.destroy()
+        if not enroll_store.entries:
+            dim(enroll_list, "هنوز واژه‌ای ثبت نشده")
+            return
+        for e in enroll_store.entries:
+            row = ctk.CTkFrame(enroll_list, fg_color="transparent")
+            row.pack(fill="x", pady=1)
+            n_var = len(e.get("variants", []))
+            ctk.CTkLabel(row, text=f"«{e['word']}» — {n_var} واریانت تأییدشده",
+                         font=(fam, 13), text_color=theme.FG,
+                         anchor="e").pack(side="right")
+            ctk.CTkButton(row, text="ویرایش", width=60, height=26,
+                          corner_radius=6, font=(fam, 12),
+                          fg_color=theme.SURFACE_2,
+                          hover_color=theme.SURFACE_3, text_color=theme.FG,
+                          command=lambda wd=e: open_enroll_dialog(wd)
+                          ).pack(side="left", padx=(4, 0))
+            ctk.CTkButton(row, text="حذف", width=56, height=26, corner_radius=6,
+                          font=(fam, 12), fg_color=theme.SURFACE_2,
+                          hover_color=theme.DANGER, text_color=theme.FG,
+                          command=lambda wd=e["word"]: (
+                              enroll_store.remove_entry(wd), _enroll_changed())
+                          ).pack(side="left")
+
+    def open_enroll_dialog(entry: dict | None = None):
+        """entry=None → ثبت واژه جدید؛ dict → ویرایش همان واژه."""
+        dlg = tk.Toplevel(win)
+        dlg.title("ویرایش واژه" if entry else "ثبت واژه جدید")
+        dlg.geometry("470x430")
+        dlg.attributes("-topmost", True)
+        dlg.configure(bg=theme.BG)
+        # style_toplevel پنجره را مخفی نگه می‌دارد (ضد فلش سفید)؛ نمایش
+        # در پایان با smooth_show — و grab بعد از نمایان‌شدن، وگرنه رویدادها
+        # به پنجره‌ی نامرئی می‌رود و تنظیمات فریز می‌شود
+        style_toplevel(dlg)
+        apply_icon(dlg)
+
+        body = ctk.CTkFrame(dlg, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=16, pady=12)
+
+        ctk.CTkLabel(body, text="واژه‌ی درست — همان‌طور که باید نوشته شود:",
+                     font=(fam, 13), text_color=theme.FG,
+                     anchor="e").pack(fill="x", pady=(0, 3))
+        var_word = tk.StringVar()
+        if entry:
+            var_word.set(str(entry.get("word", "")))
+        ctk.CTkEntry(body, textvariable=var_word, font=(fam, 14), height=38,
+                     corner_radius=8, fg_color=theme.SURFACE_2,
+                     border_color=theme.BORDER,
+                     text_color=theme.FG).pack(fill="x")
+
+        ctk.CTkLabel(body, text="سه بار واضح بگو — ضبط را شروع کن، بگو، و قطع کن؛ بعد با پخش گوش بده:",
+                     font=(fam, 13), text_color=theme.FG,
+                     anchor="e").pack(fill="x", pady=(10, 3))
+
+        heard_forms: list[str] = [str(v) for v in (entry or {}).get("variants", [])]
+        var_checks: dict[str, tk.BooleanVar] = {}
+        check_frame = ctk.CTkFrame(body, fg_color="transparent")
+        check_frame.pack(fill="x", pady=(2, 0))
+        # افزودن دستی واریانت — شکل شنیده‌شده را که در متن زنده دیدی،
+        # بدون ضبط مجدد همین‌جا تایپ کن؛ شنیدنِ مدل در دیکته با ضبطِ
+        # تنها فرق می‌کند و دقیق‌ترین منبع واریانت همان متن زنده است
+        manual_row = ctk.CTkFrame(body, fg_color="transparent")
+        manual_row.pack(fill="x", pady=(0, 6))
+        var_manual = tk.StringVar()
+        ctk.CTkEntry(manual_row, textvariable=var_manual, font=(fam, 13),
+                     height=32, corner_radius=6, fg_color=theme.SURFACE_2,
+                     border_color=theme.BORDER,
+                     text_color=theme.FG).pack(side="right", fill="x",
+                                               expand=True, padx=(6, 0))
+        ctk.CTkButton(manual_row, text="+ افزودن دستی", width=110, height=30,
+                      corner_radius=6, font=(fam, 12),
+                      fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3,
+                      text_color=theme.FG,
+                      command=lambda: add_manual_variant()).pack(side="left")
+        slots: list[dict] = []               # per-slot: rec/samples/timer
+        status_lbls: list[ctk.CTkLabel] = []
+        rec_btns: list[ctk.CTkButton] = []
+        play_btns: list[ctk.CTkButton] = []
+        busy = {"slot": -1}                  # اسلات در حال ضبط
+        playing = {"slot": -1}               # اسلات در حال پخش
+        result_q: queue.Queue = queue.Queue()
+        REC_MAX_SEC = 10.0                   # سقف ایمنی — توقف خودکار
+
+        engine_ok = app is not None and getattr(app, "engine", None) is not None
+
+        def rebuild_checks():
+            for w in check_frame.winfo_children():
+                w.destroy()
+            for v in heard_forms:
+                if v in var_checks:
+                    continue
+                var_checks[v] = tk.BooleanVar(value=True)
+            if not heard_forms:
+                dim(check_frame, "هنوز واریانتی نیست — ضبط کن یا دستی اضافه کن")
+                return
+            dim(check_frame, "شکل‌های شنیده‌شده — هر کدام را تأیید می‌کنی در خروجی جای واژه‌ی درست می‌نشیند:")
+            for v, var in var_checks.items():
+                ctk.CTkCheckBox(check_frame, text=f"«{v}»", variable=var,
+                                **check_style).pack(anchor="e", pady=1)
+
+        def add_manual_variant():
+            v = var_manual.get().strip()
+            if len(v) < 2:
+                return
+            if v not in heard_forms:
+                heard_forms.append(v)
+            var_manual.set("")
+            rebuild_checks()
+
+        def _decode_worker(slot: int, data, word: str):
+            # هیچ دسترسی Tk اینجا ممنوع — word و data از ترد اصلی آمده‌اند
+            try:
+                text = str(app.engine.transcribe(data, 16000) or "")
+                variants = enroll_mod.harvest_variants(
+                    app.engine, data, word, text=text)
+                result_q.put(("done", slot, text, variants))
+            except Exception as e:
+                result_q.put(("err", slot, str(e)[:60], []))
+
+        def stop_rec(slot: int):
+            s = slots[slot]
+            if s["timer"] is not None:
+                dlg.after_cancel(s["timer"])
+                s["timer"] = None
+            rec, s["rec"] = s["rec"], None
+            busy["slot"] = -1
+            rec.stop()
+            data = rec.get_buffer_16k()
+            s["samples"] = data
+            # بدون این، دکمه پخش برای همیشه disabled می‌ماند — ریشه‌ی
+            # «پخش کار نمی‌کند»؛ حتی ضبط کوتاه برای تشخیص قابل پخش است
+            play_btns[slot].configure(state="normal")
+            rec_btns[slot].configure(
+                text=f"ضبط {'۱۲۳'[slot]}", state="normal",
+                fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3)
+            for j, b in enumerate(rec_btns):
+                if j != slot and slots[j]["rec"] is None:
+                    b.configure(state="normal")
+            if data.size < 0.3 * 16000:
+                status_lbls[slot].configure(
+                    text="ضبط خیلی کوتاه بود — دوباره ضبط کن",
+                    text_color=theme.WARN)
+                return
+            status_lbls[slot].configure(text="در حال پردازش…",
+                                        text_color=theme.WARN)
+            # word همین‌جا در ترد اصلی خوانده می‌شود — StringVar.get از
+            # ترد کارگر «main thread is not in main loop» می‌دهد
+            word = var_word.get().strip()
+            threading.Thread(target=_decode_worker,
+                             args=(slot, data, word), daemon=True).start()
+
+        def toggle_rec(slot: int):
+            if busy["slot"] == slot:
+                stop_rec(slot)
+                return
+            if busy["slot"] >= 0:
+                return
+            if not var_word.get().strip():
+                status_lbls[slot].configure(text="اول واژه‌ی درست را بنویس",
+                                            text_color=theme.DANGER)
+                return
+            if not engine_ok:
+                status_lbls[slot].configure(
+                    text="موتور تشخیص هنوز بارگذاری نشده",
+                    text_color=theme.DANGER)
+                return
+            # دستگاه در ترد اصلی حل می‌شود — خواندن کمبوی CTk از ترد کارگر خطا می‌دهد
+            dev = selected_device()
+            if dev is None and app is not None:
+                dev = getattr(app, "device", None)
+            try:
+                rec = Recorder(device=dev, block_ms=50)
+                rec.start()  # همان مسیر ضبط دیکته — سریع و بی‌probe
+            except Exception as e:
+                status_lbls[slot].configure(text=f"خطا: {str(e)[:50]}",
+                                            text_color=theme.DANGER)
+                return
+            busy["slot"] = slot
+            slots[slot]["rec"] = rec
+            rec_btns[slot].configure(
+                text="توقف", fg_color=theme.DANGER, hover_color=theme.DANGER)
+            play_btns[slot].configure(state="disabled")
+            status_lbls[slot].configure(text="در حال ضبط…", text_color=theme.WARN)
+            slots[slot]["timer"] = dlg.after(
+                int(REC_MAX_SEC * 1000), lambda: stop_rec(slot))
+
+        def play_slot(slot: int):
+            import sounddevice as sd
+
+            data = slots[slot]["samples"]
+            if data is None or not data.size:
+                return
+            btn = play_btns[slot]
+            if playing["slot"] == slot:  # در حال پخش — قطع
+                sd.stop()
+                playing["slot"] = -1
+                btn.configure(text="پخش")
+                return
+            sd.stop()
+            # ضبط میکروفون معمولاً خیلی کم‌صدا است (peak ~۰٫۰۱) — مدل ASR
+            # آن را راحت می‌شنود ولی پخش مستقیمش تقریباً نامرئی است؛
+            # برای پخش به peak نرمال می‌شود (سقف تقویت ×۳۰)
+            out = data
+            peak = float(np.abs(data).max())
+            if 0.0 < peak < 0.15:
+                out = np.clip(data * min(30.0, 0.5 / peak), -1.0, 1.0)
+            try:
+                sd.play(out, 16000)
+            except Exception as e:
+                status_lbls[slot].configure(text=f"خطای پخش: {str(e)[:40]}",
+                                            text_color=theme.DANGER)
+                return
+            playing["slot"] = slot
+            btn.configure(text="قطع")
+
+            def _reset():
+                # پایان طبیعی پخش — بدون این، فشار بعدی «قطع» می‌شد و صدا نمی‌داد
+                if playing["slot"] == slot:
+                    playing["slot"] = -1
+                    if btn.winfo_exists():
+                        btn.configure(text="پخش")
+
+            dlg.after(int(len(data) / 16000 * 1000) + 300, _reset)
+
+        def poll_results():
+            try:
+                while True:
+                    kind, slot, payload, variants = result_q.get_nowait()
+                    if kind == "err":
+                        status_lbls[slot].configure(text=f"خطا: {payload}",
+                                                    text_color=theme.DANGER)
+                    else:
+                        new = [v for v in variants if v not in heard_forms]
+                        heard_forms.extend(new)
+                        shown = payload.strip() or "چیزی شنیده نشد"
+                        status_lbls[slot].configure(
+                            text=f"شنیده شد: {shown}",
+                            text_color=theme.ACCENT if new else theme.WARN)
+                        rebuild_checks()
+            except queue.Empty:
+                pass
+            if dlg.winfo_exists():
+                dlg.after(100, poll_results)
+
+        for i in range(3):
+            slots.append({"rec": None, "samples": None, "timer": None})
+            row = ctk.CTkFrame(body, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            st = ctk.CTkLabel(row, text="—", font=(fam, 12),
+                              text_color=theme.FG_DIM, anchor="e")
+            st.pack(side="right", fill="x", expand=True, padx=(6, 0))
+            pbtn = ctk.CTkButton(row, text="پخش", width=60, height=30,
+                                 corner_radius=6, font=(fam, 12),
+                                 fg_color=theme.SURFACE_2,
+                                 hover_color=theme.SURFACE_3,
+                                 text_color=theme.FG, state="disabled",
+                                 command=lambda s=i: play_slot(s))
+            pbtn.pack(side="left", padx=(6, 0))
+            btn = ctk.CTkButton(row, text=f"ضبط {'۱۲۳'[i]}", width=80, height=30,
+                                corner_radius=6, font=(fam, 12, "bold"),
+                                fg_color=theme.SURFACE_2,
+                                hover_color=theme.SURFACE_3, text_color=theme.FG,
+                                command=lambda s=i: toggle_rec(s))
+            btn.pack(side="left")
+            status_lbls.append(st)
+            rec_btns.append(btn)
+            play_btns.append(pbtn)
+        if not engine_ok:
+            dim(body, "موتور تشخیص هنوز بارگذاری نشده — بعد از آماده‌شدن اپ دوباره باز کن")
+
+        rebuild_checks()
+        dlg.after(100, poll_results)
+        smooth_show(dlg)  # نمایش نرم بعد از ساخت کامل — ویندوز از قبل مخفی بود
+        dlg.grab_set()    # فقط بعد از نمایان‌شدن؛گرنه grab روی پنجره مخفی می‌ماند
+
+        def save_entry():
+            word = var_word.get().strip()
+            if len(word) < 2:
+                return
+            checked = [v for v, var in var_checks.items() if var.get()]
+            if entry is not None and \
+                    enroll_mod.norm_word(str(entry.get("word", ""))) != \
+                    enroll_mod.norm_word(word):
+                # متن واژه عوض شده — مدخل با نام قبلی حذف شود
+                enroll_store.remove_entry(str(entry.get("word", "")))
+            enroll_store.add_entry(word, checked)
+            _enroll_changed()
+            dlg.destroy()
+
+        btnrow = ctk.CTkFrame(body, fg_color="transparent")
+        btnrow.pack(side="bottom", fill="x", pady=(8, 0))
+        ctk.CTkButton(btnrow, text="ذخیره واژه", font=(fam, 13, "bold"),
+                      height=36, width=130, corner_radius=8,
+                      fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER,
+                      text_color=theme.ON_ACCENT,
+                      command=save_entry).pack(side="right")
+        ctk.CTkButton(btnrow, text="انصراف", font=(fam, 13),
+                      height=36, width=100, corner_radius=8,
+                      fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3,
+                      text_color=theme.FG,
+                      command=dlg.destroy).pack(side="left")
+
+    add_btn = ctk.CTkButton(ce, text="+ ثبت واژه جدید", font=(fam, 13, "bold"),
+                            height=34, width=140, corner_radius=8,
+                            fg_color=theme.SURFACE_2, hover_color=theme.SURFACE_3,
+                            text_color=theme.FG,
+                            command=open_enroll_dialog)
+    add_btn.pack(anchor="e", pady=(6, 0))
+    _sync_enroll_ui()
+    rebuild_enroll_list()
 
     cm_info = card(t_adv, "درباره موتور تشخیص")
     ctk.CTkLabel(cm_info, text="Shenava-Koochik v1.0", font=(fam, 13, "bold"),
@@ -475,6 +972,7 @@ def open_settings(parent_root, app=None):
     dim(c3, "در برنامه‌هایی که با دسترسی مدیر باز شده‌اند درج کار نمی‌کند؛ اپ را هم مدیر اجرا کن یا روش درج را عوض کن")
     dim(c3, "اگر میکروفون را عوض کردی، از تب میکروفون دستگاه را انتخاب کن یا حالت خودکار را نگه دار")
     dim(c3, "اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ خاموش یا روشن‌کردنش از تب درج متن است")
+    dim(c3, "اگر مدل واژه‌ای را مدام غلط می‌شنود، از تب پیشرفته آن را صوتی ثبت کن تا از این پس درست نوشته شود")
 
     # ================= دکمه‌های ثابت پایین (pack در بالای فایل انجام شد) =================
     def _sync(data: dict):
@@ -483,7 +981,7 @@ def open_settings(parent_root, app=None):
         var_hotkey.set(data.get("hotkey"))
         prev_hotkey = data.get("hotkey")
         hk_hint.configure(text=HINT_TXT, text_color=theme.FG_DIM)
-        dev_combo.set(auto_label)
+        dev_combo.set(auto["label"])
         var_paste.set(data.get("paste_method"))
         var_commands.set(bool(data.get("voice_commands")))
         var_itn.set(bool(data.get("persian_itn")))
@@ -497,6 +995,9 @@ def open_settings(parent_root, app=None):
         sample.configure(font=(fam, int(var_font.get())))
         var_auto_stop.set(auto_stop_labels.get(int(data.get("auto_stop_sec") or 0), "خاموش"))
         var_hotword.set(bool(data.get("hotword_boost")))
+        var_stable_live.set(bool(data.get("stable_live")))
+        var_enroll.set(bool(data.get("enroll_alias")))
+        _sync_enroll_ui()
         txt_hotwords.delete("1.0", "end")
         txt_hotwords.insert("1.0", "\n".join(str(w) for w in (data.get("hotwords") or [])))
 
@@ -524,6 +1025,7 @@ def open_settings(parent_root, app=None):
         cfg.set("overlay_font_size", int(var_font.get()))
         cfg.set("auto_stop_sec", AUTO_STOP_LABELS.get(var_auto_stop.get(), 0))
         cfg.set("input_device", selected_device())
+        cfg.set("input_device_key", selected_device_key())
         hw_on = bool(var_hotword.get())
         hw_list = [ln.strip() for ln in txt_hotwords.get("1.0", "end").splitlines()
                    if len(ln.strip()) >= 2]
@@ -533,6 +1035,8 @@ def open_settings(parent_root, app=None):
             return
         cfg.set("hotword_boost", hw_on)
         cfg.set("hotwords", hw_list)
+        cfg.set("stable_live", bool(var_stable_live.get()))
+        cfg.set("enroll_alias", bool(var_enroll.get()))
         cfg.save()
         set_autostart(var_autostart.get())
         tester.stop()
@@ -544,22 +1048,62 @@ def open_settings(parent_root, app=None):
 
     def close():
         tester.stop()
-        if hotkey_suspended and app is not None:
-            app.resume_hotkey()
+        _resume_hotkey_once()
         win.destroy()
 
-    ctk.CTkButton(btn_bar, text="بازنشانی", font=(fam, 13), height=40,
-                  width=100, corner_radius=8, fg_color=theme.SURFACE_2,
-                  hover_color=theme.SURFACE_3, text_color=theme.FG,
-                  command=reset).pack(side="left")
-    ctk.CTkButton(btn_bar, text="ذخیره", font=(fam, 13, "bold"), height=40,
-                  width=130, corner_radius=8, fg_color=theme.ACCENT,
-                  hover_color=theme.ACCENT_HOVER, text_color=theme.ON_ACCENT,
-                  command=save).pack(side="right", padx=(8, 0))
-    ctk.CTkButton(btn_bar, text="انصراف", font=(fam, 13), height=40,
-                  width=110, corner_radius=8, fg_color=theme.SURFACE_2,
-                  hover_color=theme.SURFACE_3, text_color=theme.FG,
-                  command=close).pack(side="right")
+    def _resume_hotkey_once():
+        """برگرداندن میانبر در هر مسیر بسته‌شدن — حتی نابهنجار."""
+        nonlocal hotkey_suspended
+        if hotkey_suspended and app is not None:
+            hotkey_suspended = False
+            try:
+                app.resume_hotkey()
+            except Exception:
+                pass
+
+    def _on_destroy(event):
+        if event.widget is win:
+            _resume_hotkey_once()
+
+    # destroy بدون close (خطای نیمه‌راه در ساخت/کد خارجی) هم پوشش داده می‌شود
+    win.bind("<Destroy>", _on_destroy)
+
+    # سه دکمه هم‌عرض — بعد از چیدمان، ردیف با لبه‌ی کارت‌های تب تراز
+    # می‌شود: «ذخیره» از سمت شروع (راست) و «بازنشانی» تا انتهای ردیف (چپ).
+    btn_reset = ctk.CTkButton(btn_bar, text="بازنشانی", font=(fam, 13), height=40,
+                              width=100, corner_radius=8, fg_color=theme.SURFACE_2,
+                              hover_color=theme.SURFACE_3, text_color=theme.FG,
+                              command=reset)
+    btn_reset.pack(side="left")
+    btn_save = ctk.CTkButton(btn_bar, text="ذخیره", font=(fam, 13, "bold"), height=40,
+                             width=100, corner_radius=8, fg_color=theme.ACCENT,
+                             hover_color=theme.ACCENT_HOVER, text_color=theme.ON_ACCENT,
+                             command=save)
+    btn_save.pack(side="right", padx=(8, 0))
+    btn_close = ctk.CTkButton(btn_bar, text="انصراف", font=(fam, 13), height=40,
+                              width=100, corner_radius=8, fg_color=theme.SURFACE_2,
+                              hover_color=theme.SURFACE_3, text_color=theme.FG,
+                              command=close)
+    btn_close.pack(side="right")
+
+    def _align_btn_bar():
+        """هم‌عرض‌کردن سه دکمه و تراز لبه‌ی ردیف با کارت‌های تب —
+        بعد از اینکه چیدمان واقعی پنجره نشست."""
+        try:
+            inset = (tabview.tab("عمومی").winfo_rootx()
+                     - win.winfo_rootx()) + 2  # +2: padx کارت داخل تب
+            if inset <= 0:
+                return
+            btn_bar.configure(padx=inset)
+            inner_w = win.winfo_width() - 2 * inset
+            bw = max(80, (inner_w - 16) // 3)
+            for b in (btn_reset, btn_close, btn_save):
+                b.configure(width=bw)
+        except Exception:
+            pass
+
+    win.after(80, _align_btn_bar)
+    win.after(450, _align_btn_bar)  # بعد از settle نهایی smooth_show
 
     win.protocol("WM_DELETE_WINDOW", close)
     smooth_ctk.flush_pending(win)  # پرکردن بوم‌های خالی — دکمه‌ها از اولین فریم کامل

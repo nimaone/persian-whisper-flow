@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import threading
+import time
+from difflib import SequenceMatcher
 
 import numpy as np
 import sounddevice as sd
@@ -183,6 +185,63 @@ class Recorder:
         return total / self._src_rate
 
 
+def current_input_devices() -> list[dict]:
+    """همه‌ی ورودی‌های خام با Host API آن‌ها — پایه‌ی فهرست و بازیابی."""
+    return [{"index": i, "name": d["name"],
+             "rate": int(d["default_samplerate"]),
+             "api": sd.query_hostapis(d["hostapi"])["name"]}
+            for i, d in enumerate(sd.query_devices())
+            if d["max_input_channels"] > 0]
+
+
+def device_label(d: dict) -> str:
+    """برچسب نمایشی پایدار — بدون ایندکس خام (ناپایدار بین بوت‌ها)."""
+    return f"{d['name']} — {d['api']}"
+
+
+def resolve_pinned_device(pinned: int | None, key: str | None) -> int | None:
+    """اعتبارسنجی/بازیابی دستگاه پین‌شده — ایندکس‌های PortAudio بین بوت‌ها
+    و جابه‌جایی USB عوض می‌شوند؛ کلید پایدار (نام — API) مرجع است.
+
+    None در خروجی یعنی دستگاه پین‌شده دیگر پیدا نیست → حالت خودکار.
+    """
+    if pinned is None and not key:
+        return None
+    devices = current_input_devices()
+    if key:
+        for d in devices:
+            if d["index"] == pinned and device_label(d) == key:
+                return pinned  # پین همچنان معتبر
+        for d in devices:
+            if device_label(d) == key:
+                return d["index"]  # ایندکس جابه‌جا شده — با کلید بازیابی
+        return None  # دستگاه پیدا نشد
+    return pinned
+
+
+def device_siblings(entries: list[dict], index: int) -> list[dict]:
+    """سایر مسیرهای Host API همان میکروفون فیزیکی — مرتب بر اساس اولویت.
+
+    برای fallback: اگر یک مسیر دستگاه باز نشود، مسیرهای دیگر همان
+    میکروفون (مثلاً WASAPI به‌جای WDM-KS) کاندید تست/ضبط‌اند.
+    """
+    def name_key(name: str) -> str:
+        return "".join(ch for ch in name.lower() if ch.isalnum())
+
+    def api_rank(e: dict) -> int:
+        api = e.get("api", "")
+        return HOSTAPI_PREFERENCE.index(api) if api in HOSTAPI_PREFERENCE \
+            else len(HOSTAPI_PREFERENCE)
+
+    target = next((e for e in entries if e["index"] == index), None)
+    if target is None:
+        return []
+    tn = name_key(target["name"])
+    sibs = [e for e in entries if e["index"] != index
+            and SequenceMatcher(None, tn, name_key(e["name"])).ratio() >= 0.6]
+    return sorted(sibs, key=api_rank)
+
+
 def list_input_devices() -> list[dict]:
     out = []
     for i, d in enumerate(sd.query_devices()):
@@ -191,24 +250,82 @@ def list_input_devices() -> list[dict]:
     return out
 
 
-def probe_device_level(device: int, seconds: float = 0.35) -> float:
-    """سطح RMS دستگاه ورودی را می‌سنجد — برای تشخیص میکروفون زنده."""
+# ترجیح Host API برای نماینده‌ی هر میکروفون فیزیکی — WASAPI استاندارد
+# ویندوز است؛ WDM-KS پس‌انداز (روی برخی سیستم‌ها ناپایدار)، MME و
+# DirectSound قدیمی‌اند (نویز پایه بالاتر).
+HOSTAPI_PREFERENCE = ("Windows WASAPI", "Windows WDM-KS",
+                      "Windows DirectSound", "MME")
+
+
+def dedupe_input_devices(entries: list[dict]) -> list[dict]:
+    """یک مدخل برای هر میکروفون فیزیکی از میان ورودی‌های همه‌ی Host APIها.
+
+    ویندوز هر دستگاه را به ازای هر API یک بار فهرست می‌کند (۳ میکروفون
+    فیزیکی → ۱۵+ مدخل). گروه‌بندی با شباهت نام نرمال‌شده (نام دستگاه‌ها
+    بین APIها کمی فرق می‌کند) و نماینده‌ی هر گروه = API با اولویت بالاتر.
+    نام‌های مستعار سیستم («Sound Mapper»، «Primary Sound Capture») حذف
+    می‌شوند — همان دستگاه پیش‌فرض‌اند، نه میکروفون جدا.
+    """
+    def api_rank(api: str) -> int:
+        return HOSTAPI_PREFERENCE.index(api) if api in HOSTAPI_PREFERENCE \
+            else len(HOSTAPI_PREFERENCE)
+
+    def name_key(name: str) -> str:
+        return "".join(ch for ch in name.lower() if ch.isalnum())
+
+    kept: list[dict] = []
+    for e in sorted(entries, key=lambda e: api_rank(e.get("api", ""))):
+        nk = name_key(e["name"])
+        if "soundmapper" in nk or "primarysoundcapture" in nk:
+            continue
+        group = None
+        for k in kept:
+            if SequenceMatcher(None, nk, k["_norm"]).ratio() >= 0.6:
+                group = k
+                break
+        if group is None:
+            kept.append({**e, "_norm": nk})
+    return [{k: v for k, v in e.items() if not k.startswith("_")} for e in kept]
+
+
+def probe_device_level(device: int, seconds: float = 0.35) -> tuple[float, bool]:
+    """سطح RMS دستگاه ورودی با استریم واقعی — برای تشخیص میکروفون زنده.
+
+    مقدار دوم «اعتبار» است: دستگاه‌هایی که اصلاً باز نمی‌شوند یا داده‌ی
+    خراب می‌دهند (دامنه بریده/غیرواقعی — بعضی مسیرهای WDM-KS) رد می‌شوند
+    تا detect_best_device روی دستگاه شکسته نگه نایستد.
+    """
     try:
-        dev = sd.query_devices(device, "input")
-        sr = int(dev["default_samplerate"])
-        rec = sd.rec(int(seconds * sr), samplerate=sr, channels=1, dtype="float32", device=device)
-        sd.wait()
-        data = rec.copy()
-        return float(np.sqrt((data.astype(np.float64) ** 2).mean()))
+        info = sd.query_devices(device, "input")
+        sr = int(info["default_samplerate"])
+        vals: list[float] = []
+        peak = 0.0
+        with sd.InputStream(device=device, channels=1, samplerate=sr,
+                            dtype="float32",
+                            blocksize=int(sr * 0.05)) as st:
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < seconds:
+                data, _overflow = st.read(int(sr * 0.05))
+                peak = max(peak, float(np.abs(data).max()))
+                vals.append(float(np.sqrt(
+                    (data[:, 0].astype(np.float64) ** 2).mean())))
+        if not vals:
+            return 0.0, False
+        mean_rms = float(np.mean(vals))
+        # داده‌ی خراب: نمونه فراتر از ۱٫۰ (بریده) یا RMS غیرواقعی
+        if peak > 1.0 or mean_rms > 0.5:
+            return 0.0, False
+        return mean_rms, True
     except Exception:
-        return 0.0
+        return 0.0, False
 
 
 def detect_best_device() -> int | None:
-    """دستگاه ورودی با بالاترین سطح صدا (و نرخ >= 16000) را برمی‌گرداند.
+    """دستگاه ورودی با بالاترین سطح سیگنال (و نرخ >= 16000) را برمی‌گرداند.
 
-    میکروفون‌های مجازی (ManyCam و امثالش) معمولاً سکوت مطلق می‌دهند؛
-    این تابع در startup یک بار اجرا می‌شود.
+    فقط دستگاه‌هایی که واقعاً استریم سالم می‌دهند کاندیدند؛ میکروفون‌های
+    مجازی (ManyCam و امثالش) معمولاً سکوت مطلق می‌دهند و مسیرهای خراب
+    رد می‌شوند. هیچ دستگاهی سیگنال نداشت → None یعنی پیش‌فرض سیستم.
     """
     best, best_rms = None, 0.0
     for i, d in enumerate(sd.query_devices()):
@@ -216,10 +333,34 @@ def detect_best_device() -> int | None:
             continue
         if int(d["default_samplerate"]) < 16000:
             continue
-        rms = probe_device_level(i)
+        rms, valid = probe_device_level(i)
+        if not valid:
+            continue
         if rms > best_rms:
             best, best_rms = i, rms
     if best is not None and best_rms > 0.0002:
         return best
     # هیچ دستگاهی سیگنال نداشت — device None یعنی پیش‌فرض سیستم
     return None
+
+
+def input_quality(vals: list[float]) -> tuple[str, str]:
+    """برآورد کیفیت ورودی از نمونه‌های RMS تست صدا → (متن، سطح).
+
+    سطح یکی از good/warn/bad/none — برای رنگ نشانگر تب میکروفون.
+    کف نویز = چارک ده‌میانگین‌ها، اوج = چارک نودوپنجم.
+    """
+    if not vals:
+        return "برای سنجش کیفیت، تست را شروع کن و چند ثانیه صحبت کن", "none"
+    s = sorted(vals)
+    floor = s[max(0, int(len(s) * 0.10))]
+    peak = s[min(len(s) - 1, int(len(s) * 0.95))]
+    if peak < 0.0008:
+        return "سیگنالی نمی‌آید — دستگاه دیگری را امتحان کن", "bad"
+    snr = 20.0 * float(np.log10(max(peak, 1e-9) / max(floor, 1e-9)))
+    stats = f"نویز پایه {floor:.4f} • اوج صدا {peak:.4f} • SNR≈{snr:.0f}dB"
+    if snr >= 20:
+        return f"کیفیت ورودی: خوب — {stats}", "good"
+    if snr >= 12:
+        return f"کیفیت ورودی: متوسط — {stats}", "warn"
+    return f"کیفیت ورودی: ضعیف — نویز تقریباً هم‌سطح صداست — {stats}", "bad"

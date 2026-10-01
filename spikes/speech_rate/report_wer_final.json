@@ -1,0 +1,66 @@
+{
+  "total": {
+    "ref": 4724,
+    "e0": 1632,
+    "eA": 1481,
+    "eB": 1447,
+    "fixed": 34,
+    "corrupt": 3
+  },
+  "sources": {
+    "kooshiar-aug23-p1": {
+      "ref_words": 782,
+      "err_base": 274,
+      "err_rejoin": 243,
+      "err_alias": 238,
+      "fixed": 6,
+      "corrupted": 1,
+      "n_alias": 13
+    },
+    "kooshiar-aug23-p2": {
+      "ref_words": 850,
+      "err_base": 321,
+      "err_rejoin": 289,
+      "err_alias": 285,
+      "fixed": 5,
+      "corrupted": 1,
+      "n_alias": 9
+    },
+    "kooshiar-live1": {
+      "ref_words": 861,
+      "err_base": 280,
+      "err_rejoin": 260,
+      "err_alias": 252,
+      "fixed": 9,
+      "corrupted": 1,
+      "n_alias": 12
+    },
+    "kooshiar-market-ai2": {
+      "ref_words": 591,
+      "err_base": 214,
+      "err_rejoin": 186,
+      "err_alias": 181,
+      "fixed": 5,
+      "corrupted": 0,
+      "n_alias": 9
+    },
+    "kooshiar-market-ai": {
+      "ref_words": 804,
+      "err_base": 276,
+      "err_rejoin": 259,
+      "err_alias": 256,
+      "fixed": 3,
+      "corrupted": 0,
+      "n_alias": 12
+    },
+    "kooshiar-war-econ": {
+      "ref_words": 836,
+      "err_base": 267,
+      "err_rejoin": 244,
+      "err_alias": 235,
+      "fixed": 6,
+      "corrupted": 0,
+      "n_alias": 13
+    }
+  }
+}

@@ -1,0 +1,266 @@
+{
+  "candidates": [
+    {
+      "right": "میکنم",
+      "n_err": 65,
+      "variant": "می",
+      "share": 0.49,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میده",
+      "n_err": 53,
+      "variant": "می",
+      "share": 0.94,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میشه",
+      "n_err": 45,
+      "variant": "می",
+      "share": 0.67,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میگم",
+      "n_err": 42,
+      "variant": "می",
+      "share": 0.67,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میدم",
+      "n_err": 40,
+      "variant": "می",
+      "share": 0.85,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میکنن",
+      "n_err": 39,
+      "variant": "می",
+      "share": 0.87,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "کلاد",
+      "n_err": 36,
+      "variant": "کلاب",
+      "share": 0.47,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میکنه",
+      "n_err": 31,
+      "variant": "می",
+      "share": 0.9,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "نمیدونم",
+      "n_err": 27,
+      "variant": "نمی",
+      "share": 0.78,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میکنی",
+      "n_err": 26,
+      "variant": "می",
+      "share": 0.77,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میکنین",
+      "n_err": 22,
+      "variant": "می",
+      "share": 0.95,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میزنم",
+      "n_err": 19,
+      "variant": "می",
+      "share": 0.89,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میکنیم",
+      "n_err": 18,
+      "variant": "می",
+      "share": 0.61,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میگه",
+      "n_err": 18,
+      "variant": "می",
+      "share": 0.56,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میخوام",
+      "n_err": 15,
+      "variant": "می",
+      "share": 0.6,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میشن",
+      "n_err": 14,
+      "variant": "می",
+      "share": 1.0,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "ریلیز",
+      "n_err": 14,
+      "variant": "ریز",
+      "share": 0.71,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میدین",
+      "n_err": 14,
+      "variant": "می",
+      "share": 0.5,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میخواین",
+      "n_err": 13,
+      "variant": "می",
+      "share": 0.77,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میگیرین",
+      "n_err": 13,
+      "variant": "می",
+      "share": 0.54,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "پارتی",
+      "n_err": 13,
+      "variant": "های",
+      "share": 0.77,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "ایناش",
+      "n_err": 12,
+      "variant": "اش",
+      "share": 0.5,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میسازن",
+      "n_err": 12,
+      "variant": "می",
+      "share": 1.0,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "میدیم",
+      "n_err": 12,
+      "variant": "می",
+      "share": 1.0,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "همون",
+      "n_err": 12,
+      "variant": "دهیم",
+      "share": 0.83,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "دقیقهای",
+      "n_err": 11,
+      "variant": "دقیقه",
+      "share": 1.0,
+      "variant_common_as_correct": 1
+    },
+    {
+      "right": "لایویم",
+      "n_err": 11,
+      "variant": "لایوون",
+      "share": 0.45,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "بگین",
+      "n_err": 11,
+      "variant": "بگید",
+      "share": 1.0,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "ادای",
+      "n_err": 11,
+      "variant": "اعدای",
+      "share": 0.64,
+      "variant_common_as_correct": 0
+    },
+    {
+      "right": "عجیبی",
+      "n_err": 11,
+      "variant": "عجی",
+      "share": 0.91,
+      "variant_common_as_correct": 0
+    }
+  ],
+  "alias_map": {
+    "کلااد": "کلاد",
+    "کلاب": "کلاد",
+    "اسایک": "میکنه",
+    "نمی": "نمیدونم",
+    "سرو": "میکنین",
+    "خواد": "میگه",
+    "میام": "میخوام",
+    "ریز": "ریلیز",
+    "ریس": "ریلیز",
+    "حال": "میخواین",
+    "سوال": "میخواین",
+    "مییره": "میگیرین",
+    "گیریم": "میگیرین"
+  },
+  "before_bad": 5346,
+  "after_bad": 5303,
+  "fixed": 43,
+  "corrupted": 0,
+  "reduction_pct": 0.8,
+  "per_word": {
+    "میخواین": {
+      "bad": 13,
+      "fixed": 0,
+      "corrupt": 0
+    },
+    "نمیدونم": {
+      "bad": 83,
+      "fixed": 25,
+      "corrupt": 0
+    },
+    "ریلیز": {
+      "bad": 5,
+      "fixed": 1,
+      "corrupt": 0
+    },
+    "میخوام": {
+      "bad": 20,
+      "fixed": 17,
+      "corrupt": 0
+    },
+    "میگه": {
+      "bad": 4,
+      "fixed": 0,
+      "corrupt": 0
+    },
+    "کلاد": {
+      "bad": 9,
+      "fixed": 0,
+      "corrupt": 0
+    }
+  }
+}
