@@ -53,8 +53,13 @@ class ControlWindow:
         self.hint_text = ft.Text("", style=t.fam("Regular", 9), color=t.FG_DIM,
                                  text_align=ft.TextAlign.RIGHT)
 
-        # نسخه برنامه — ریز، پایین-چپ
-        ver = ft.Text(f"v{APP_VERSION}", style=t.fam("Regular", 8), color=t.FG_DIM)
+        # نسخه برنامه — ریز، گوشه پایین-چپ؛ END در RTL = لبه‌ی چپ
+        # (قرینه‌ی pack(side="left") در CTk)
+        ver = ft.Row(
+            [ft.Text(f"v{APP_VERSION}", style=t.fam("Regular", 8),
+                     color=t.FG_DIM)],
+            alignment=ft.MainAxisAlignment.END,
+        )
 
         self.rec_btn.expand = True   # داخل Row → تمام‌عرض مثل fill="x"
         st_btn.expand = True
