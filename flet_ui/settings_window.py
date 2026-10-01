@@ -15,7 +15,7 @@ import time
 import flet as ft
 import numpy as np
 
-from app.config import APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config
+from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config
 from flet_ui import theme as t
 
 REC_MAX_SEC = 10.0  # سقف ایمنی ضبط ثبت واژه — توقف خودکار
@@ -73,7 +73,8 @@ class SettingsWindow:
         self.page = page
         t.install_fonts(page)
         t.apply_icon(page)
-        page.title = APP_TITLE_FULL + " — تنظیمات"
+        # مثل نسخه CTk: فقط نام کوتاه — «تنظیمات — دیکته‌یار»
+        page.title = f"تنظیمات — {APP_TITLE}"
         page.bgcolor = t.BG
         page.theme_mode = ft.ThemeMode.DARK
         page.window.width = 560   # هم‌اندازه‌ی win.geometry("560x640") نسخه CTk

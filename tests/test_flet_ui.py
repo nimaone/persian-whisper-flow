@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import flet as ft
 
-from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS
+from app.config import APP_TITLE, APP_VERSION, DEFAULTS
 
 
 # ---------- ابزار شبیه‌سازی ----------
@@ -229,7 +229,8 @@ class SettingsTestBase(unittest.TestCase):
 
 class TestSettingsWindow(SettingsTestBase):
     def test_window_setup(self):
-        self.assertEqual(self.page.title, APP_TITLE_FULL + " — تنظیمات")
+        # مثل نسخه CTk: نام کوتاه — بدون «(ویسپر فلوی فارسی)»
+        self.assertEqual(self.page.title, f"تنظیمات — {APP_TITLE}")
         self.assertEqual((self.page.window.width, self.page.window.height), (560, 640))
         self.assertTrue(self.page.rtl)
         self.assertIsNotNone(self.page.window.icon)
