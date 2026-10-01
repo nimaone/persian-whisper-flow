@@ -392,7 +392,12 @@ class SettingsWindow:
 
         auto_stop_labels = ["خاموش", "۳ ثانیه", "۵ ثانیه", "۱۰ ثانیه"]
         self.var_auto_stop = t.dropdown(
-            auto_stop_labels, auto_stop_labels[0], width=110,
+            auto_stop_labels,
+            # مقدار ذخیره‌شده‌ی cfg — وگرنه هر بازشدن «خاموش» نشان می‌داد و
+            # ذخیره‌ی بعدی، تنظیم کاربر را بی‌صدا صفر می‌کرد (قرینه‌ی CTk)
+            {0: "خاموش", 3: "۳ ثانیه", 5: "۵ ثانیه", 10: "۱۰ ثانیه"}.get(
+                int(cfg.get("auto_stop_sec") or 0), "خاموش"),
+            width=110,
         )
         c_beh = t.card(
             "رفتار ضبط",
@@ -1232,12 +1237,15 @@ class SettingsWindow:
             "auto_stop_sec": auto_stop_labels.get(self.var_auto_stop.value, 0),
             "hotword_boost": hw_on,
             "stable_live": bool(self.var_stable.value),
+            # از خود سوییچ — وگرنه تغییر کاربر بی‌اثر بود و مقدار دیسک
+            # pass-through می‌شد (قرینه‌ی cfg.set("enroll_alias") در CTk)
+            "enroll_alias": bool(self.var_enroll.value),
             "hotwords": [ln.strip() for ln in (self.txt_hotwords.value or "").splitlines()
                          if len(ln.strip()) >= 2],
         }
-        # کلیدهایی که این UI ویرایش نمی‌کند (rejoin_prefixes، enroll_alias،
-        # stable_live، input_device_key) — از تنظیمات فعلی عبور بدهد و جای
-        # خالی را با DEFAULTS پر کند تا ذخیره، آن‌ها را ریست یا پاک نکند.
+        # کلیدهایی که این UI ویرایش نمی‌کند (rejoin_prefixes، input_device_key)
+        # — از تنظیمات فعلی عبور بدهد و جای خالی را با DEFAULTS پر کند تا
+        # ذخیره، آن‌ها را ریست یا پاک نکند.
         for k, default in DEFAULTS.items():
             if k not in d:
                 v = (self.cfg or {}).get(k, default)
@@ -1272,6 +1280,7 @@ class SettingsWindow:
         self.var_commands.value = bool(data.get("voice_commands"))
         self.var_itn.value = bool(data.get("persian_itn"))
         self.var_stable.value = bool(data.get("stable_live"))
+        self.var_enroll.value = bool(data.get("enroll_alias"))
         self.var_restore.value = bool(data.get("restore_clipboard"))
         self.var_sound.value = bool(data.get("sound_feedback"))
         self.var_overlay.value = bool(data.get("overlay_enabled"))
@@ -1284,6 +1293,9 @@ class SettingsWindow:
             .get(int(data.get("auto_stop_sec") or 0), "خاموش")
         self.var_hotword.value = bool(data.get("hotword_boost"))
         self.txt_hotwords.value = "\n".join(str(w) for w in (data.get("hotwords") or []))
+        # سوییچ/یادداشت ثبت صوتی با حالت پایدارِ تازه همگام شود — وگرنه
+        # پس از بازنشانی، حالت کهنه‌ی سوییچ و نکته‌ی هشدار می‌ماند
+        self._sync_enroll_ui()
         # دستگاه ورودی — None یعنی خودکار؛ دستگاه ذخیره‌شده باید در کمبو
         # نمایش داده شود (قرینه‌ی current_name در CTk)
         dev = data.get("input_device")

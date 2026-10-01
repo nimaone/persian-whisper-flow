@@ -15,6 +15,7 @@ import threading
 import time
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -248,20 +249,22 @@ class BackendConfig(unittest.TestCase):
         app, win, _, _ = make_app()
         app.start()
         wait_for(lambda: app.state == STATE_IDLE)
-        # apply_config از دیسک بازخوانی می‌کند — مثل پنجره تنظیمات در فایل می‌نویسیم
-        saved = app.settings_path_backup = Config.load()
-        data = dict(saved.data)
-        data["input_device"] = 3
-        Config(data).save()
-        app.apply_config()
-        self.assertEqual(app.device, 3)
-        self.assertTrue(app._device_ready.is_set())
-        # بازگشت به خودکار → تشخیص مجدد (پروب واقعی WASAPI گاهی کند است)
-        Config(dict(saved.data)).save()
-        app.apply_config()
-        self.assertTrue(wait_for(lambda: app.device == 0, timeout=15))
-        # فایل تنظیمات را به حالت اول برگردان
-        saved.save()
+        # رجیستری واقعی لمس نشود — این تست درباره‌ی دستگاه است
+        with unittest.mock.patch("flet_ui.backend._apply_autostart", lambda e: None):
+            # apply_config از دیسک بازخوانی می‌کند — مثل پنجره تنظیمات در فایل می‌نویسیم
+            saved = app.settings_path_backup = Config.load()
+            data = dict(saved.data)
+            data["input_device"] = 3
+            Config(data).save()
+            app.apply_config()
+            self.assertEqual(app.device, 3)
+            self.assertTrue(app._device_ready.is_set())
+            # بازگشت به خودکار → تشخیص مجدد (پروب واقعی WASAPI گاهی کند است)
+            Config(dict(saved.data)).save()
+            app.apply_config()
+            self.assertTrue(wait_for(lambda: app.device == 0, timeout=15))
+            # فایل تنظیمات را به حالت اول برگردان
+            saved.save()
 
     def test_engine_key_reflects_hotword_settings(self):
         # فروشگاه ثبت واژه به مسیر خالی می‌رود — نتایج نباید به
@@ -310,6 +313,135 @@ class BackendConfig(unittest.TestCase):
         app.quit()
         self.assertFalse(app._running)
         self.assertTrue(rec.stopped)
+
+
+class Autostart(unittest.TestCase):
+    """اجرای خودکار باید نسخه‌ی فلت را بالا بیاورد، نه CTk را."""
+
+    def test_command_points_to_flet_launcher(self):
+        from flet_ui.backend import _flet_autostart_command
+        cmd = _flet_autostart_command()
+        self.assertIn("dikteyar_flet.pyw", cmd)
+        self.assertNotIn("main.py", cmd)
+        self.assertIn("pythonw", cmd.lower(), "بدون کنسول — pythonw ترجیح دارد")
+
+    def test_launcher_file_exists_next_to_command(self):
+        from flet_ui.backend import _PROJECT_ROOT
+        self.assertTrue((_PROJECT_ROOT / "dikteyar_flet.pyw").exists(),
+                        "لانچرِ ثبت‌شده در رجیستری باید واقعاً موجود باشد")
+
+    def test_source_mode_writes_flet_path_under_app_name(self):
+        import flet_ui.backend as B
+        from app.config import APP_NAME
+        rec = {}
+
+        class FakeKey:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        fake = SimpleNamespace(
+            HKEY_CURRENT_USER=object(), KEY_SET_VALUE=1, REG_SZ=1,
+            OpenKey=lambda *a, **k: FakeKey(),
+            SetValueEx=lambda key, name, res, typ, val: rec.setdefault("set", (name, val)),
+            DeleteValue=lambda key, name: rec.setdefault("deleted", name),
+        )
+        with mock.patch.object(B, "winreg", fake):
+            B._apply_autostart(True)
+        self.assertEqual(rec["set"][0], APP_NAME)
+        self.assertIn("dikteyar_flet.pyw", rec["set"][1])
+
+    def test_disable_deletes_registry_value(self):
+        import flet_ui.backend as B
+        from app.config import APP_NAME
+        rec = {}
+
+        class FakeKey:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        fake = SimpleNamespace(
+            HKEY_CURRENT_USER=object(), KEY_SET_VALUE=1, REG_SZ=1,
+            OpenKey=lambda *a, **k: FakeKey(),
+            SetValueEx=lambda *a: rec.setdefault("set", True),
+            DeleteValue=lambda key, name: rec.setdefault("deleted", name),
+        )
+        with mock.patch.object(B, "winreg", fake):
+            B._apply_autostart(False)
+        self.assertEqual(rec.get("deleted"), APP_NAME)
+        self.assertNotIn("set", rec)
+
+    def test_frozen_delegates_to_shared_set_autostart(self):
+        import flet_ui.backend as B
+        calls = []
+        with mock.patch.object(B, "set_autostart", lambda e: calls.append(e)), \
+             mock.patch.object(sys, "frozen", True, create=True):
+            B._apply_autostart(True)
+        self.assertEqual(calls, [True])
+
+
+class OpenSettingsFailure(unittest.TestCase):
+    """شکست Popen نباید هاتکی را معلق بگذارد (قرینه‌ی CTk)."""
+
+    def test_popen_failure_restores_hotkey_and_notifies(self):
+        app, _, _, _ = make_app()
+        resumed, notified = [], []
+        with mock.patch.object(app, "resume_hotkey", lambda: resumed.append(1)), \
+             mock.patch.object(app, "_notify", lambda m: notified.append(m)), \
+             mock.patch("flet_ui.backend.subprocess.Popen",
+                        side_effect=OSError("پروسه باز نشد")):
+            app.open_settings()
+        self.assertEqual(resumed, [1], "هاتکی باید برگردد")
+        self.assertEqual(len(notified), 1)
+        self.assertIsNone(app._settings_proc)
+
+
+class EngineRelease(unittest.TestCase):
+    """موتور قدیمی بعد از تعویض/خروج رها شود — نشت حافظه نباشد."""
+
+    def test_rebuild_releases_old_engine(self):
+        app, _, _, _ = make_app()
+        app.start()
+        self.assertTrue(wait_for(lambda: app.state == STATE_IDLE))
+        old = app.engine
+        released = []
+        old.release_detail_decoder = lambda: released.append(1)
+        app.cfg.set("stable_live", True)   # امضای موتور عوض می‌شود
+        app._rebuild_engine()
+        self.assertTrue(wait_for(lambda: app.state == STATE_IDLE))
+        self.assertIsNot(app.engine, old)
+        self.assertEqual(released, [1])
+
+    def test_rebuild_keeps_old_engine_when_new_fails(self):
+        app, _, _, _ = make_app()
+        app.start()
+        self.assertTrue(wait_for(lambda: app.state == STATE_IDLE))
+        old = app.engine
+        released = []
+        old.release_detail_decoder = lambda: released.append(1)
+
+        def boom():
+            raise RuntimeError("لود نشد")
+
+        app._engine_loader = boom
+        app._rebuild_engine()
+        self.assertTrue(wait_for(lambda: app.state == STATE_IDLE))
+        self.assertIs(app.engine, old, "موتور قبلی باید قابل استفاده بماند")
+        self.assertEqual(released, [], "موتور سالمِ درحال‌استفاده رها نشود")
+
+    def test_quit_releases_current_engine(self):
+        app, _, _, _ = make_app()
+        app.start()
+        self.assertTrue(wait_for(lambda: app.state == STATE_IDLE))
+        released = []
+        app.engine.release_detail_decoder = lambda: released.append(1)
+        app.quit()
+        self.assertEqual(released, [1])
 
 
 class BackendStartup(unittest.TestCase):

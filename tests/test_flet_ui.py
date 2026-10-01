@@ -690,6 +690,58 @@ class TestSaveValidation(SettingsTestBase):
         self.assertIsNone(w.result)
 
 
+class TestAutoStopAndEnroll(SettingsTestBase):
+    """auto_stop_sec از cfg خوانده شود و enroll_alias از سوییچ ذخیره شود."""
+
+    def _win_with(self, **cfg_over):
+        from flet_ui.settings_window import SettingsWindow
+        page = MockPage()
+
+        class Fixed(SettingsWindow):
+            def _load(self):
+                return {**DEFAULTS, **cfg_over}
+
+        win = Fixed(page)
+        self.page = page
+        self.win = win
+        self.root = page.added[0]
+        return win
+
+    def test_saved_auto_stop_shows_in_combo(self):
+        win = self._win_with(auto_stop_sec=10)
+        self.assertEqual(win.var_auto_stop.value, "۱۰ ثانیه",
+                         "مقدار ذخیرهشده باید در کمبو بیاید — نه همیشه «خاموش»")
+
+    def test_default_auto_stop_is_off(self):
+        win = self._win_with()
+        self.assertEqual(win.var_auto_stop.value, "خاموش")
+
+    def test_collect_reads_enroll_switch(self):
+        win = self._win_with(enroll_alias=False)
+        win.var_enroll.value = True
+        self.assertTrue(win._collect()["enroll_alias"])
+        win.var_enroll.value = False
+        self.assertFalse(win._collect()["enroll_alias"],
+                         "تغییر سوییچ باید در ذخیره بیاید — نه مقدار دیسک")
+
+    def test_reset_syncs_enroll_ui(self):
+        win = self._win_with(enroll_alias=False, stable_live=True)
+        # حالت پایدار: سوییچ غیرفعال + نکته‌ی هشدار پیدا
+        self.assertTrue(win.var_enroll.disabled)
+        self.assertTrue(win.enroll_stable_note.visible)
+        # بازنشانی → DEFAULTS: حالت پایدار خاموش، سوییچ فعال، نکته پنهان
+        win._reset()
+        self.assertFalse(win.var_stable.value)
+        self.assertFalse(win.var_enroll.disabled, "پس از ریست سوییچ باید از حالت پایدار دربیاید")
+        self.assertFalse(win.enroll_stable_note.visible)
+        self.assertEqual(win.var_enroll.value, bool(DEFAULTS["enroll_alias"]))
+
+    def test_apply_sets_enroll_from_data(self):
+        win = self._win_with()
+        win._apply({**DEFAULTS, "enroll_alias": True})
+        self.assertTrue(win.var_enroll.value)
+
+
 class TestWindowEvents(unittest.TestCase):
     """نوع رویداد پنجره — flet بسته به نسخه رشته یا WindowEventType می‌دهد."""
 

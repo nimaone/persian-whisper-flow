@@ -13,19 +13,21 @@ page.run_task هندل می‌کند (پچ از ترد فرعی به صف ارس
 """
 from __future__ import annotations
 
+import gc
 import os
 import queue
 import subprocess
 import sys
 import threading
 import time
+import winreg
 from pathlib import Path
 
 import numpy as np
 
 from app import enroll, fa_post, persian_itn, voice_commands
 from app.asr import DirectCtcAsrEngine, LiveTranscriber, SpeechGate, load_engine
-from app.config import Config, model_dir, set_autostart
+from app.config import APP_NAME, Config, model_dir, set_autostart
 from app.paster import insert_text, send_key
 from app.recorder import Recorder, detect_best_device, resolve_pinned_device
 
@@ -69,6 +71,43 @@ def _beep(start: bool):
         import winsound
         winsound.Beep(880 if start else 660, 60)
     except Exception:
+        pass
+
+
+def _flet_autostart_command() -> str:
+    """فرمان اجرای خودکار نسخه‌ی فلت — لانچر ریشه، نه app/main.py.
+
+    _autostart_command در app/config.py مسیر نسخه‌ی CTk را می‌نویسد؛ اگر
+    همین‌جا استفاده می‌شد، بعد از ریاستارت ویندوز اپ CTk بالا می‌آمد.
+    در حالت frozen مسیر exe از قبل درست است و همان set_autostart کافی است.
+    """
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    py = pythonw if pythonw.exists() else Path(sys.executable)
+    launcher = _PROJECT_ROOT / "dikteyar_flet.pyw"
+    return f'"{py}" "{launcher}"'
+
+
+def _apply_autostart(enable: bool):
+    """ثبت اجرای خودکار برای نسخه‌ی فلت — قرینه‌ی set_autostart با مسیر فلت."""
+    if getattr(sys, "frozen", False):
+        set_autostart(enable)
+        return
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0,
+            winreg.KEY_SET_VALUE,
+        ) as key:
+            if enable:
+                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ,
+                                  _flet_autostart_command())
+            else:
+                try:
+                    winreg.DeleteValue(key, APP_NAME)
+                except FileNotFoundError:
+                    pass
+    except OSError:
         pass
 
 
@@ -531,10 +570,17 @@ class DictationApp:
         # و تست صدا روی همان دستگاه (قرینه‌ی appِ در دسترس CTk)
         env = {**os.environ,
                "DIKTEYAR_DEVICE": str(self.device) if self.device is not None else ""}
-        self._settings_proc = subprocess.Popen(
-            [sys.executable, "-m", "flet_ui.run", "settings"],
-            cwd=str(_PROJECT_ROOT), env=env,
-        )
+        try:
+            self._settings_proc = subprocess.Popen(
+                [sys.executable, "-m", "flet_ui.run", "settings"],
+                cwd=str(_PROJECT_ROOT), env=env,
+            )
+        except Exception as e:
+            # هاتکی معلق نماند — وگرنه میانبر تا ریاستارت اپ مرده است
+            # (قرینه‌ی try/except و resume در open_settings نسخه CTk)
+            self.resume_hotkey()
+            self._notify(f"باز کردن تنظیمات ناموفق: {str(e)[:40]}")
+            return
         threading.Thread(target=self._wait_settings, daemon=True).start()
 
     def _wait_settings(self):
@@ -552,7 +598,7 @@ class DictationApp:
         self.refresh_alias_map()  # واریانت‌های ثبت‌شده ممکن است عوض شده باشند
         if self._register_hotkey_enabled:
             self.apply_hotkey()
-        set_autostart(bool(self.cfg.get("autostart")))
+        _apply_autostart(bool(self.cfg.get("autostart")))
         dev = self.cfg.get("input_device")
         if dev is None:
             # بازگشت به «خودکار» — تشخیص مجدد دستگاه در پس‌زمینه
@@ -592,6 +638,7 @@ class DictationApp:
             if self.state != STATE_IDLE:
                 return  # در حال لود اولیه — دست نزنیم
             self.state = STATE_LOADING
+        old_engine = self.engine
         self._ui_set_state(self.state)
         try:
             engine = self._engine_loader()
@@ -605,6 +652,14 @@ class DictationApp:
         self.engine = engine
         self.live = live
         self._engine_dirty = False
+        if old_engine is not None and old_engine is not engine:
+            # نشست ONNX قدیمی + دیکودر beam رها شود — وگرنه با هر تعویض
+            # موتور (هات‌وورد/متن پایدار) صدها MB جمع می‌شود (قرینه‌ی CTk)
+            try:
+                old_engine.release_detail_decoder()
+            except Exception:
+                pass
+        gc.collect()  # جلسه‌ی رهاشده واقعاً از حافظه برود (قرینه‌ی بعد از تنظیمات در CTk)
         with self._state_lock:
             self.state = STATE_IDLE
         self._ui_set_state(self.state)
@@ -612,6 +667,11 @@ class DictationApp:
     def quit(self):
         self._running = False
         self._unregister_hotkey()
+        if self.engine is not None and hasattr(self.engine, "release_detail_decoder"):
+            try:
+                self.engine.release_detail_decoder()  # قرینه‌ی quit در CTk
+            except Exception:
+                pass
         if self.tray is not None:
             try:
                 self.tray.stop()  # آیکون سینی نباید بعد از خروج بماند
