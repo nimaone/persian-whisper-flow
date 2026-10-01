@@ -166,6 +166,8 @@ def dropdown(values: list[str], value: str, on_change=None, width: int | None = 
 
     نکته: ft.dropdown.Option(«متن») مقدار را فقط در key می‌گذارد و
     label خالی می‌ماند — پس key و text را صریح می‌دهیم.
+    scale ندارد: با scale=0.9 کمبوی تمامعرض، ۱۰٪ کوچک‌تر از کارت رندر
+    می‌شد و لبه‌هایش به padding کارت نمی‌رسید (fill="x" درست دیده نمی‌شد).
     """
     return ft.Dropdown(
         options=[ft.dropdown.Option(key=v, text=v) for v in values],
@@ -179,5 +181,4 @@ def dropdown(values: list[str], value: str, on_change=None, width: int | None = 
         dense=True,
         expand=width is None,
         text_style=fam("Regular", 13),
-        scale=0.9,
     )

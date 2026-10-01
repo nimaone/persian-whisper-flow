@@ -354,8 +354,9 @@ class SettingsWindow:
                     pass
         self.var_device = t.dropdown(
             [self.auto_label] + [lbl for _, lbl in devices], init_val, height=36)
-
-        c_dev = t.card("دستگاه ورودی", self.var_device)
+        # داخل Row → تمامعرض مثل fill="x" در CTk. مستقیم در Columnِ کارت،
+        # expand فقط ارتفاع را میکشد و کمبو به اندازهی متن گزینهها میماند
+        c_dev = t.card("دستگاه ورودی", ft.Row([self.var_device]))
         c_dev.content.controls.append(
             t.dim("خودکار = پرسیگنال‌ترین میکروفون فعال در شروع هر ضبط")
         )
@@ -381,11 +382,17 @@ class SettingsWindow:
             bgcolor=t.SURFACE_2, color=t.FG,
             style=t.btn_style(weight="bold"),
         )
-        # ترتیب و چینش مثل CTk: موج → دکمه وسط‌چین → حکم. Rowها
-        # تمام‌عرض می‌گیرند و کارت را مثل fill="x" پُر می‌کنند — وگرنه
-        # Stackِ تنها عرض کارت را به اندازه‌ی خودش محدود می‌کند.
+        # ترتیب و چینش مثل CTk: موج → دکمه وسط‌چین → حکم. موج داخل نوار
+        # تمامعرض با پسزمینهی DEEP — قرینهی کانوس fill="x" با bg=DEEP در
+        # CTk: میلهها (۴۳۵px، جدیدترین در راست) در لبهی راست نوار می‌نشینند
+        # و باقی نوار، تیرهی خالی میماند — نه خطچین شناور روی کارت
+        self.spec_wave = ft.Container(
+            self.spec_stack, bgcolor=t.DEEP, height=28, expand=True,
+            padding=ft.Padding(left=8, right=8, top=0, bottom=0),
+            alignment=ft.Alignment(1.0, 0.0),  # راست — جدیدترین میله راست مثل CTk
+        )
         c_test = t.card("تست صدا",
-                        ft.Row([self.spec_stack]),
+                        self.spec_wave,
                         ft.Row([self.test_btn], alignment=ft.MainAxisAlignment.CENTER),
                         self.verdict,
                         self.quality_lbl)

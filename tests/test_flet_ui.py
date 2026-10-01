@@ -458,6 +458,26 @@ class TestSettingsWindow(SettingsTestBase):
         self.assertFalse(self.win.var_enroll.disabled)
         self.assertFalse(self.win.enroll_stable_note.visible)
 
+    def test_device_dropdown_fills_card_width(self):
+        # رگرسیون: کمبوی دستگاه مستقیم داخل Column کارت بود — expand در
+        # Column فقط ارتفاع را میکشد و عرض کمبو به اندازهی متن گزینهها
+        # میماند؛ باید مثل fill="x" در CTk تمامعرض کارت شود (داخل Row)
+        row = next(r for r in _find_all(self.root, ft.Row)
+                   if self.win.var_device in r.controls)
+        self.assertTrue(self.win.var_device.expand,
+                        "کمبو باید expand=True داشته باشد تا در Row پُر شود")
+
+    def test_wave_strip_is_full_width_deep_bar(self):
+        # رگرسیون: Stack میلهها شناور روی کارت بود — مثل کانوس CTk باید
+        # نوار تمامعرض DEEP باشد که میلهها از لبهی راستش رسم میشوند
+        wave = self.win.spec_wave
+        self.assertEqual(wave.bgcolor, "#181818")            # DEEP
+        self.assertTrue(wave.expand, "نوار موج باید تمامعرض کارت شود")
+        self.assertIs(wave.content, self.win.spec_stack)
+        self.assertEqual(self.win.spec_stack.width, 435)
+        self.assertEqual(wave.alignment, ft.Alignment(1.0, 0.0),
+                         "میلهها در لبهی راست — جدیدترین سمت راست مثل CTk")
+
     def test_spectrum_bars_are_in_stack_with_fixed_left(self):
         # باگ رگرسیون: میله‌ها در Row با layout-END بودند و تغییر height کل
         # TabBarView را باز-layout می‌کرد → انیمیشن بی‌حرکت. الان Stack با
