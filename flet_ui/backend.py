@@ -13,6 +13,7 @@ page.run_task هندل می‌کند (پچ از ترد فرعی به صف ارس
 """
 from __future__ import annotations
 
+import os
 import queue
 import subprocess
 import sys
@@ -26,7 +27,7 @@ from app import fa_post, persian_itn, voice_commands
 from app.asr import DirectCtcAsrEngine, LiveTranscriber, SpeechGate, load_engine
 from app.config import Config, model_dir, set_autostart
 from app.paster import insert_text, send_key
-from app.recorder import Recorder, detect_best_device
+from app.recorder import Recorder, detect_best_device, resolve_pinned_device
 
 STATE_LOADING = "loading"
 STATE_IDLE = "idle"
@@ -39,6 +40,27 @@ SILENCE_RMS = 0.003     # آستانه سکوت برای توقف خودکار
 SPEECH_GATE_HANGOVER = 1.5  # ثانیه decode اضافه پس از آخرین صدا
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _device_fallback_chain(device: int | None) -> list[int | None]:
+    """زنجیره‌ی تلاش برای باز کردن میکروفون: دستگاه انتخابی → مسیرهای دیگر
+    Host API همان میکروفون فیزیکی → پیش‌فرض سیستم. (قرینه‌ی app/main.py)
+
+    بعضی مسیرها (WDM-KS، میکروفون مجازی بی‌برنامه) باز نمی‌شوند؛
+    شکست یکی نباید دیکته را کلاً بیندازد.
+    """
+    devs: list[int | None] = []
+    if device is not None:
+        devs.append(device)
+        try:
+            from app.recorder import current_input_devices, device_siblings
+            devs.extend(e["index"] for e in
+                        device_siblings(current_input_devices(), device))
+        except Exception:
+            pass
+    if None not in devs:
+        devs.append(None)  # پیش‌فرض سیستم — آخرین جان پناه
+    return list(dict.fromkeys(devs))
 
 
 def _beep(start: bool):
@@ -197,7 +219,11 @@ class DictationApp:
         if self.device is not None:
             self._device_ready.set()
             return
-        self.device = self._device_probe()
+        # دستگاه پین‌شده با کلید پایدار اعتبارسنجی می‌شود — ایندکس خام
+        # بین بوت‌ها جابه‌جا می‌شود؛ اگر دستگاه پیدا نبود، خودکار
+        resolved = resolve_pinned_device(
+            self.cfg.get("input_device"), self.cfg.get("input_device_key"))
+        self.device = resolved if resolved is not None else self._device_probe()
         self._device_ready.set()
 
     # ---------- اتصال به UI (آپدیت Flet از هر thread امن است) ----------
@@ -281,14 +307,31 @@ class DictationApp:
         # صبر برای تشخیص میکروفون (معمولاً در استارتاپ تمام شده)
         if not self._device_ready.wait(timeout=8):
             pass  # با دستگاه پیش‌فرض ادامه می‌دهیم
-        rec = self._recorder_factory(self.device)
-        try:
-            rec.start()
-        except Exception as e:
+        if self.device is None:
+            # تشخیص پس‌زمینه هنوز تمام نشده — همین‌جا حل می‌کنیم
+            try:
+                self.device = self._device_probe()
+            except Exception:
+                self.device = None
+        # زنجیره‌ی جایگزین: شکست یک مسیر نباید دیکته را کلاً بیندازد —
+        # بعضی مسیرها (WDM-KS، میکروفون مجازی بی‌برنامه) باز نمی‌شوند
+        rec = None
+        last_err: Exception | None = None
+        for dev in _device_fallback_chain(self.device):
+            r = self._recorder_factory(dev)
+            try:
+                r.start()
+                rec = r
+                self.device = dev  # دستگاهی که واقعاً باز شد
+                break
+            except Exception as e:
+                last_err = e
+        if rec is None:
             with self._state_lock:
                 self.state = STATE_IDLE
             self._ui_set_state(STATE_IDLE)
-            self._notify(f"میکروفون باز نشد: {str(e)[:40]}")
+            msg = str(last_err)[:40] if last_err else "دستگاهی باز نشد"
+            self._notify(f"میکروفون باز نشد: {msg}")
             return
         self.recorder = rec
         with self._state_lock:
@@ -442,9 +485,13 @@ class DictationApp:
         if self._settings_proc is not None and self._settings_proc.poll() is None:
             return  # از قبل باز است
         self.suspend_hotkey()
+        # دستگاه فعلی به پروسه‌ی تنظیمات می‌رود — برچسب «خودکار — نام»
+        # و تست صدا روی همان دستگاه (قرینه‌ی appِ در دسترس CTk)
+        env = {**os.environ,
+               "DIKTEYAR_DEVICE": str(self.device) if self.device is not None else ""}
         self._settings_proc = subprocess.Popen(
             [sys.executable, "-m", "flet_ui.run", "settings"],
-            cwd=str(_PROJECT_ROOT),
+            cwd=str(_PROJECT_ROOT), env=env,
         )
         threading.Thread(target=self._wait_settings, daemon=True).start()
 
@@ -470,8 +517,16 @@ class DictationApp:
             self._device_ready.clear()
             threading.Thread(target=self._detect_device, daemon=True).start()
         else:
-            self.device = int(dev)
-            self._device_ready.set()
+            resolved = resolve_pinned_device(
+                int(dev), self.cfg.get("input_device_key"))
+            if resolved is None:
+                # دستگاه پین‌شده دیگر موجود نیست — تشخیص خودکار
+                self.device = None
+                self._device_ready.clear()
+                threading.Thread(target=self._detect_device, daemon=True).start()
+            else:
+                self.device = resolved
+                self._device_ready.set()
         # تغییر حالت/لیست هات‌وورد → موتور باید عوض شود؛ وسط ضبط ممنوع، بعداً در _finish
         if new_key != old_key and self.state in (STATE_RECORDING, STATE_TRANSCRIBING):
             self._engine_dirty = True
@@ -482,7 +537,8 @@ class DictationApp:
     @property
     def _engine_key(self):
         """امضای تنظیماتی که نوع موتور را تعیین می‌کند."""
-        return (bool(self.cfg.get("hotword_boost")), tuple(self._hotwords()))
+        return (bool(self.cfg.get("hotword_boost")), tuple(self._hotwords()),
+                bool(self.cfg.get("stable_live")))
 
     def _rebuild_engine(self):
         """تعویض موتور در thread پس‌زمینه — مثل استارتاپ: LOADING → IDLE."""
@@ -496,7 +552,8 @@ class DictationApp:
         self._ui_set_state(self.state)
         try:
             engine = self._engine_loader()
-            live = LiveTranscriber(engine)
+            live = LiveTranscriber(
+                engine, stable_live=bool(self.cfg.get("stable_live")))
         except Exception:
             with self._state_lock:
                 self.state = STATE_IDLE if self.live else STATE_LOADING

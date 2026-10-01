@@ -7,11 +7,26 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 import flet as ft
 
 from app.config import APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config
 from flet_ui import theme as t
+
+# رنگ نشانگر کیفیت ورودی تب میکروفون — بر اساس سطح input_quality()
+_QUALITY_COLORS = {"good": t.ACCENT, "warn": t.WARN,
+                   "bad": t.DANGER, "none": t.FG_DIM}
+
+
+def _friendly_audio_error(msg: str) -> str:
+    """پیام خطای صوتی قابل‌فهم — مسیرهای WDM-KS/مجازی باز نمی‌شوند."""
+    low = (msg or "").lower()
+    if "unanticipated host error" in low or "error starting stream" in low:
+        return ("این مسیر دستگاه روی این سیستم باز نمی‌شود — اگر میکروفون مجازی "
+                "است برنامه‌اش را اجرا کن، یا مسیر دیگری (مثلاً WASAPI) همان "
+                "میکروفون را انتخاب کن")
+    return msg
 
 HK_HINT = "برای ثبت میان‌بر جدید، روی کادر کلیک کن و ترکیب دلخواه را بفشار (لغو: Esc)"
 HK_BAD = "ترکیب باید شامل کلید ترکیبی (کنترل، آلت یا شیفت) باشد، یا یک کلید F"
@@ -271,21 +286,54 @@ class SettingsWindow:
     # ================================================= میکروفون
     def _tab_mic(self):
         cfg = self.cfg
+        # فهرست یکدست: یک مدخل برای هر میکروفون فیزیکی — ویندوز هر دستگاه
+        # را به ازای هر Host API یک بار فهرست می‌کند (۳ میکروفون → ۱۵+
+        # مدخل). برچسب بدون ایندکس خام است (بین بوت‌ها ناپایدار)؛ کلید
+        # پایدار «نام — API» است (قرینه‌ی تب میکروفون CTk).
         try:
-            import sounddevice as sd
-            devices = [f"[{i}] {d['name']}"
-                       for i, d in enumerate(sd.query_devices()) if d["max_input_channels"] > 0]
+            from app.recorder import (current_input_devices,
+                                      dedupe_input_devices, device_label)
+            all_inputs = current_input_devices()
+            devices = [(d["index"], device_label(d))
+                       for d in dedupe_input_devices(all_inputs)]
+            cur_pin = cfg.get("input_device")
+            if cur_pin is not None and cur_pin not in (idx for idx, _ in devices):
+                # پین فعلی در فهرست یکدست نیامد (API کم‌ترجیح) — برای
+                # دیده‌شدن انتخاب فعلی اضافه شود
+                for e in all_inputs:
+                    if e["index"] == cur_pin:
+                        devices.append((e["index"], device_label(e)))
+                        break
         except Exception:
-            devices = ["خودکار (پرسیگنال‌ترین)"]
+            all_inputs = []
+            devices = []
+        self._devices = devices        # [(index, label)] — کلید پایدار/تست
+        self._all_inputs = all_inputs  # مسیرهای جایگزین تست صدا
         self.auto_label = "خودکار (پرسیگنال‌ترین)"
-        values = [self.auto_label] + devices
         cur_dev = cfg.get("input_device")
-        init_val = values[0]
+        init_val = self.auto_label
         if cur_dev is not None:
-            match = [v for v in values if v.startswith(f"[{cur_dev}]")]
+            match = [lbl for idx, lbl in devices if idx == cur_dev]
             if match:
                 init_val = match[0]
-        self.var_device = t.dropdown(values, init_val, height=36)
+        else:
+            # در حالت خودکار، اسم میکروفونی که دیکته برگزیده کنار «خودکار»
+            # می‌آید — بک‌اند دستگاه فعلی‌اش را با env به این پروسه می‌فرستد
+            try:
+                found = int(os.environ.get("DIKTEYAR_DEVICE") or "")
+            except ValueError:
+                found = None
+            if found is not None:
+                try:
+                    from app.recorder import device_label
+                    lbl = next((device_label(e) for e in all_inputs
+                                if e["index"] == found), None)
+                    if lbl:
+                        self.auto_label = f"خودکار — {lbl}"
+                except Exception:
+                    pass
+        self.var_device = t.dropdown(
+            [self.auto_label] + [lbl for _, lbl in devices], init_val, height=36)
 
         c_dev = t.card("دستگاه ورودی", self.var_device)
         c_dev.content.controls.append(
@@ -305,6 +353,9 @@ class SettingsWindow:
                                            bottom=4))
         self.spec_stack = ft.Stack(self._bars, width=435, height=28)
         self.verdict = ft.Text("", style=t.fam("bold", 13), text_align=ft.TextAlign.RIGHT)
+        # نشانگر کیفیت ورودی — نویز پایه/اوج/SNR زنده حین تست
+        self.quality_lbl = ft.Text("", style=t.fam("Regular", 12),
+                                   color=t.FG_DIM, text_align=ft.TextAlign.RIGHT)
         self.test_btn = ft.Button(
             content="شروع تست", on_click=self._toggle_test, width=120, height=34,
             bgcolor=t.SURFACE_2, color=t.FG,
@@ -316,7 +367,8 @@ class SettingsWindow:
         c_test = t.card("تست صدا",
                         ft.Row([self.spec_stack]),
                         ft.Row([self.test_btn], alignment=ft.MainAxisAlignment.CENTER),
-                        self.verdict)
+                        self.verdict,
+                        self.quality_lbl)
 
         auto_stop_labels = ["خاموش", "۳ ثانیه", "۵ ثانیه", "۱۰ ثانیه"]
         self.var_auto_stop = t.dropdown(
@@ -359,7 +411,8 @@ class SettingsWindow:
 
     # ---------- تست صدا: ضبط واقعی RMS (قرینه‌ی MicTester در CTk) ----------
     def _start_tester(self):
-        """MicTester را روی دستگاه انتخابی روشن کن؛ None → بهترین دستگاه.
+        """MicTester را روی دستگاه انتخابی روشن کن؛ زنجیره‌ی جایگزین
+        (مسیرهای دیگر Host API همان میکروفون) اگر مسیر اصلی باز نشود.
 
         صف و رویدادِ توقف، محلیِ کلوژرِ ترد گرفته می‌شوند — نه attribute —
         تا تردِ تستر قبلی با Event خودش قطعاً تمام شود و به صف تازه نریزد.
@@ -375,37 +428,69 @@ class SettingsWindow:
 
         dev = self._selected_device()
         if dev is None:
-            # خودکار = همان دستگاهی که ضبط واقعی استفاده می‌کند
+            # خودکار = همان دستگاهی که ضبط واقعی استفاده می‌کند (بک‌اند
+            # با env می‌فرستد) — probe دوباره نه؛ نتایج detect ناپایدارند
+            # و ممکن است به دستگاهی بیفتد که استریم باز نمی‌کند
             try:
-                from app.recorder import detect_best_device
-                dev = detect_best_device()
-            except Exception:
+                dev = int(os.environ.get("DIKTEYAR_DEVICE") or "")
+            except ValueError:
                 dev = None
             if dev is None:
-                import sounddevice as sd
-                dev = int(sd.default.device[0])
+                try:
+                    from app.recorder import detect_best_device
+                    dev = detect_best_device()
+                except Exception:
+                    dev = None
+                if dev is None:
+                    import sounddevice as sd
+                    dev = int(sd.default.device[0])
+        # مسیرهای جایگزین همان میکروفون فیزیکی — اگر مسیر اصلی
+        # باز نشود، تست روی مسیر دیگر (مثلاً WASAPI) می‌رود
+        try:
+            from app.recorder import current_input_devices, device_siblings
+            inputs = getattr(self, "_all_inputs", []) or current_input_devices()
+            self._test_fallbacks = [e["index"] for e in
+                                    device_siblings(inputs, dev)]
+        except Exception:
+            self._test_fallbacks = []
 
         def run():
             import numpy as np
             try:
                 import sounddevice as sd
-                d = sd.query_devices(dev, "input")
-                sr = int(d["default_samplerate"])
-
-                def cb(indata, frames, t, status):
-                    if stop.is_set():
-                        raise sd.CallbackStop
-                    rms = float(np.sqrt((indata[:, 0].astype(np.float64) ** 2).mean()))
+                # زنجیره‌ی تست: مسیر اصلی → مسیرهای دیگر همان میکروفون —
+                # شکست یک مسیر تست را کلاً نمی‌اندازد (قرینه‌ی ضبط)
+                tried = [dev] + [e["index"] for e in
+                                 getattr(self, "_test_fallbacks", [])]
+                last_err: Exception | None = None
+                for d in tried:
                     try:
-                        q.put_nowait(("rms", rms))
-                    except _q.Full:
-                        pass
+                        info = sd.query_devices(d, "input")
+                        sr = int(info["default_samplerate"])
 
-                with sd.InputStream(device=dev, channels=1, samplerate=sr,
-                                    dtype="float32", blocksize=int(sr * 0.05),
-                                    callback=cb):
-                    while not stop.is_set():
-                        _th.Event().wait(0.05)
+                        def cb(indata, frames, t, status):
+                            if stop.is_set():
+                                raise sd.CallbackStop
+                            rms = float(np.sqrt(
+                                (indata[:, 0].astype(np.float64) ** 2).mean()))
+                            try:
+                                q.put_nowait(("rms", rms))
+                            except _q.Full:
+                                pass
+
+                        with sd.InputStream(device=d, channels=1,
+                                            samplerate=sr, dtype="float32",
+                                            blocksize=int(sr * 0.05),
+                                            callback=cb):
+                            while not stop.is_set():
+                                _th.Event().wait(0.05)
+                        return  # توقف تمیز — تمام
+                    except Exception as e:
+                        if stop.is_set():
+                            return
+                        last_err = e
+                if last_err is not None:
+                    q.put_nowait(("err", str(last_err)[:60]))
             except Exception as e:
                 try:
                     q.put_nowait(("err", str(e)[:60]))
@@ -432,6 +517,8 @@ class SettingsWindow:
         self.test_btn.content = "توقف تست" if self._testing else "شروع تست"
         self._safe_update(self.test_btn)
         if self._testing:
+            self._test_vals = []      # نمونه‌های RMS — ورودی سنجه‌ی کیفیت
+            self._quality_tick = 0
             self._start_tester()
             vals = [0.0] * 48
             # پله‌ی تطبیقی (AGC): env نرمِ بیشینه‌ی صدای شنیده‌شده است؛
@@ -453,6 +540,7 @@ class SettingsWindow:
                 bar.height = 3
                 bar.bgcolor = t.SURFACE_3
             self.verdict.value = ""
+            self.quality_lbl.value = ""
             self._safe_update(self.spec_stack)
             self._safe_update(self.verdict)
 
@@ -477,10 +565,23 @@ class SettingsWindow:
             self._stop_tester()
             self.test_btn.content = "شروع تست"
             self._safe_update(self.test_btn)
-            self.verdict.value = f"خطا: {got_err}"
+            self.verdict.value = f"خطا: {_friendly_audio_error(got_err)}"
             self.verdict.color = t.DANGER
             self._safe_update(self.verdict)
             return False
+        # نشانگر کیفیت ورودی — نویز پایه/اوج/SNR زنده حین تست
+        if not hasattr(self, "_test_vals"):
+            self._test_vals = []
+            self._quality_tick = 0
+        self._test_vals.append(rms)
+        del self._test_vals[:-120]
+        self._quality_tick += 1
+        if self._quality_tick % 12 == 0:
+            from app.recorder import input_quality
+            text, level = input_quality(self._test_vals)
+            self.quality_lbl.value = text
+            self.quality_lbl.color = _QUALITY_COLORS.get(level, t.FG_DIM)
+            self._safe_update(self.quality_lbl)
         # پله‌ی تطبیقی: بالا رفتن سریع، افت آرام (~۲s تا نصف)
         if rms > env[0]:
             env[0] = rms
@@ -708,10 +809,21 @@ class SettingsWindow:
         v = self.var_device.value
         if v == self.auto_label or not v:
             return None
-        try:
-            return int(v.split("]")[0][1:])
-        except Exception:
+        for idx, lbl in getattr(self, "_devices", []):
+            if lbl == v:
+                return idx
+        return None
+
+    def _selected_device_key(self):
+        """کلید پایدار انتخاب فعلی (نام — API) — برای بازیابی بعد از
+        جابه‌جایی ایندکس‌ها بین بوت‌ها."""
+        idx = self._selected_device()
+        if idx is None:
             return None
+        for i, lbl in self._devices:
+            if i == idx:
+                return lbl
+        return None
 
     def _apply(self, data: dict):
         """بارگذاری مقادیر روی ویجت‌ها — قرینه‌ی _sync()."""
@@ -738,9 +850,9 @@ class SettingsWindow:
         if dev is None:
             self.var_device.value = self.auto_label
         else:
-            match = [v for v in self.var_device.options
-                     if str(v.key).startswith(f"[{dev}]")]
-            self.var_device.value = match[0].key if match else self.auto_label
+            match = [lbl for i, lbl in getattr(self, "_devices", [])
+                     if i == dev]
+            self.var_device.value = match[0] if match else self.auto_label
 
     def _reset(self, e=None):
         self._end_test()
@@ -767,6 +879,7 @@ class SettingsWindow:
         self._end_test()
         data = self._collect()
         data["input_device"] = self._selected_device()
+        data["input_device_key"] = self._selected_device_key()
         err = self._validate(data)
         if err is not None:
             where, msg = err

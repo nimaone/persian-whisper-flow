@@ -349,7 +349,7 @@ class TestSettingsWindow(SettingsTestBase):
 
     def test_reset_restores_device_dropdown(self):
         # باگ رگرسیون: بازنشانی دستگاه ورودی را به خودکار برنمی‌گرداند
-        self.win.var_device.value = "[18] Microphone Array (Realtek)"
+        self.win.var_device.value = "Microphone Array (Realtek) — Windows WASAPI"
         self.win._reset(None)
         self.assertEqual(self.win.var_device.value, self.win.auto_label)
 
@@ -368,13 +368,15 @@ class TestSettingsWindow(SettingsTestBase):
 
     def test_selected_device_parses_from_value(self):
         # بعد از انتخاب آیتم (فلت خودش value را ست می‌کند)، _selected_device
-        # باید اندیس دستگاه را دربیاورد و _save باید input_device را ذخیره کند
-        opts = [str(o.key) for o in self.win.var_device.options]
-        mic_opt = next(o for o in opts if o.startswith("["))
-        self.win.var_device.value = mic_opt
-        idx = self.win._selected_device()
-        self.assertIsNotNone(idx)
-        self.assertIsInstance(idx, int)
+        # باید اندیس دستگاه را از برچسب دربیاورد — برچسب‌ها بدون ایندکس
+        # خام‌اند (ناپایدار بین بوت‌ها) و کلید پایدار «نام — API» است
+        devices = getattr(self.win, "_devices", [])
+        if not devices:
+            self.skipTest("دستگاه ورودی در این محیط یافت نشد")
+        idx, label = devices[0]
+        self.win.var_device.value = label
+        self.assertEqual(self.win._selected_device(), idx)
+        self.assertEqual(self.win._selected_device_key(), label)
         # مسیر ذخیره: _collect + input_device مثل _save
         data = self.win._collect()
         data["input_device"] = self.win._selected_device()
@@ -383,13 +385,14 @@ class TestSettingsWindow(SettingsTestBase):
     def test_apply_shows_saved_device_in_dropdown(self):
         # باگ رگرسیون: _apply فقط حالت None را هندل می‌کرد؛ دستگاه ذخیره‌شده
         # باید در کمبو نمایش داده شود وگرنه کاربر فکر می‌کند ذخیره نشده
-        opts = [str(o.key) for o in self.win.var_device.options]
-        mic_opt = next(o for o in opts if o.startswith("["))
-        idx = int(mic_opt.split("]")[0][1:])
+        devices = getattr(self.win, "_devices", [])
+        if not devices:
+            self.skipTest("دستگاه ورودی در این محیط یافت نشد")
+        idx, label = devices[0]
         data = dict(DEFAULTS)
         data["input_device"] = idx
         self.win._apply(data)
-        self.assertEqual(self.win.var_device.value, mic_opt)
+        self.assertEqual(self.win.var_device.value, label)
         # و بازگشت به خودکار
         self.win._apply(dict(DEFAULTS))
         self.assertEqual(self.win.var_device.value, self.win.auto_label)

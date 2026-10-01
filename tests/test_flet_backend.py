@@ -256,7 +256,10 @@ class BackendConfig(unittest.TestCase):
         k1 = app._engine_key
         self.assertNotEqual(k0, k1)
         # واژه‌ی تک‌حرفی فیلتر می‌شود
-        self.assertEqual(k1, (True, ("نیما", "ويسپر")))
+        self.assertEqual(k1, (True, ("نیما", "ويسپر"), False))
+        # تغییر متن زنده پایدار هم موتور را عوض می‌کند
+        app.cfg.set("stable_live", True)
+        self.assertNotEqual(k1, app._engine_key)
 
     def test_rebuild_engine_while_recording_defers(self):
         app, win, _, _ = make_app()
