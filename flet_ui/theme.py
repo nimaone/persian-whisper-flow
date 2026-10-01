@@ -70,15 +70,31 @@ def apply_icon(page: ft.Page) -> None:
 
 # ---------- هلپرهای مشترک ----------
 
-def card(title: str | None, *controls, padding: int = 12) -> ft.Container:
-    """کارت با عنوان اختیاری — قرینه‌ی card() در settings_ui.py."""
+def card(title: str | None, *controls, padding: int = 12,
+         merge_dims: bool = True) -> ft.Container:
+    """کارت با عنوان اختیاری — قرینه‌ی card() در settings_ui.py.
+
+    dimهای پشتسرهم به یک متن پیوسته میچسبند (با «•») — قرینهی رفتار
+    dim() در نسخهی CTk؛ هر پاراگراف در خط جدید شروع نمیشود.
+    merge_dims=False: چسبیدن غیرفعال — تب راهنما خطبهخط میماند (انتخاب
+    کاربر: گامها/فرمانها/نکتهها خوانایی خطبهخط بهتری دارند).
+    """
+    merged: list[ft.Control] = []
+    for c in controls:
+        prev = merged[-1] if merged else None
+        if merge_dims and getattr(c, "_is_dim", False) \
+                and getattr(prev, "_is_dim", False) \
+                and isinstance(prev.content, ft.Text) and isinstance(c.content, ft.Text):
+            prev.content.value = str(prev.content.value) + "  •  " + c.content.value
+            continue
+        merged.append(c)
     inner: list[ft.Control] = []
     if title:
         inner.append(ft.Container(
             ft.Text(title, style=fam("bold", 13), color=FG),
             padding=ft.Padding(left=0, top=0, right=0, bottom=8),
         ))
-    inner.extend(controls)
+    inner.extend(merged)
     return ft.Container(
         ft.Column(inner, spacing=0),
         bgcolor=SURFACE,
@@ -89,12 +105,18 @@ def card(title: str | None, *controls, padding: int = 12) -> ft.Container:
 
 
 def dim(text: str) -> ft.Container:
-    """متن توضیح کم‌رنگ راست‌چین — قرینه‌ی dim()."""
-    return ft.Container(
+    """متن توضیح کم‌رنگ راست‌چین — قرینه‌ی dim().
+
+    با _is_dim نشانهگذاری میشود تا card() دو dim پشتسرهم را به یک متن
+    پیوسته (با «•») بچسباند — هر پاراگراف در خط جدید شروع نمیشود.
+    """
+    c = ft.Container(
         ft.Text(text, style=fam("Regular", 11), color=FG_DIM, text_align=ft.TextAlign.RIGHT),
         alignment=ft.Alignment(1, 0),
         padding=ft.Padding(left=0, top=4),
     )
+    c._is_dim = True
+    return c
 
 
 def row_label(text: str) -> ft.Container:

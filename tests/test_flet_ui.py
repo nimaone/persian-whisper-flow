@@ -632,6 +632,20 @@ class TestThemeHelpers(unittest.TestCase):
         texts = [x.value for x in _walk(c) if isinstance(x, ft.Text)]
         self.assertIn("عنوان", texts)
 
+    def test_card_merges_consecutive_dims(self):
+        # درخواست کاربر: dimهای پشتسرهم باید در یک متن پیوسته بچسبند —
+        # نه اینکه هر پاراگراف در خط جدیدی شروع شود؛ کنترلِ بینشان
+        # (سوییچ/ورودی) مرز است و ادغام نمیشود
+        from flet_ui import theme as t
+        c = t.card("کارت", t.dim("پاراگراف یک"), t.dim("پاراگراف دو"),
+                   ft.Text("کنترل میانی"), t.dim("پاراگراف سه"))
+        texts = [x.value for x in _walk(c) if isinstance(x, ft.Text)]
+        self.assertIn("پاراگراف یک  •  پاراگراف دو", texts,
+                      "دو dim پشتسرهم باید ادغام شوند")
+        self.assertIn("پاراگراف سه", texts,
+                      "dim بعد از کنترل میانی باید جدا بماند")
+        self.assertNotIn("پاراگراف دو", texts)
+
     def test_btn_style_no_hover_color_kwarg(self):
         from flet_ui import theme as t
         s = t.btn_style()
