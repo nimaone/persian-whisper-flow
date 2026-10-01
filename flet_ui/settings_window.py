@@ -391,9 +391,15 @@ class SettingsWindow:
             self.spec_bars, bgcolor=t.DEEP, height=28, expand=True,
             padding=ft.Padding(left=8, right=8, top=0, bottom=4),
         )
+        # دکمه چسبیده به نوار نباشد — ۸px نفس بالا (کارت فقط همینقدر بلندتر
+        # میشود؛ حکم و کیفیت زیر دکمه جا میمانند و کارت بعدی کمی پایین میرود)
         c_test = t.card("تست صدا",
                         self.spec_wave,
-                        ft.Row([self.test_btn], alignment=ft.MainAxisAlignment.CENTER),
+                        ft.Container(
+                            ft.Row([self.test_btn],
+                                   alignment=ft.MainAxisAlignment.CENTER),
+                            padding=ft.Padding(left=0, top=8, right=0, bottom=0),
+                        ),
                         self.verdict,
                         self.quality_lbl)
 
