@@ -8,11 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import os
+import queue
+import threading
+import time
 
 import flet as ft
+import numpy as np
 
 from app.config import APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config
 from flet_ui import theme as t
+
+REC_MAX_SEC = 10.0  # سقف ایمنی ضبط ثبت واژه — توقف خودکار
 
 # رنگ نشانگر کیفیت ورودی تب میکروفون — بر اساس سطح input_quality()
 _QUALITY_COLORS = {"good": t.ACCENT, "warn": t.WARN,
@@ -27,6 +33,15 @@ def _friendly_audio_error(msg: str) -> str:
                 "است برنامه‌اش را اجرا کن، یا مسیر دیگری (مثلاً WASAPI) همان "
                 "میکروفون را انتخاب کن")
     return msg
+
+
+def _load_enroll_store():
+    """فروشگاه واژه‌های ثبت‌شده — بی‌صدا خالی اگر فایل خراب باشد."""
+    from app import enroll as enroll_mod
+    try:
+        return enroll_mod.EnrollStore.load()
+    except Exception:
+        return enroll_mod.EnrollStore()
 
 HK_HINT = "برای ثبت میان‌بر جدید، روی کادر کلیک کن و ترکیب دلخواه را بفشار (لغو: Esc)"
 HK_BAD = "ترکیب باید شامل کلید ترکیبی (کنترل، آلت یا شیفت) باشد، یا یک کلید F"
@@ -725,12 +740,44 @@ class SettingsWindow:
         )
 
         self.var_stable = ft.Switch(value=bool(cfg.get("stable_live")),
-                                    active_color=t.ACCENT, scale=0.9)
+                                    active_color=t.ACCENT, scale=0.9,
+                                    on_change=self._sync_enroll_ui)
         c_stable = t.card(
             "متن زنده پایدار — آزمایشی",
             ft.Row([t.row_label("قفل‌کردن پیشوند با امتیاز اطمینان"), self.var_stable]),
             t.dim("واژه فقط وقتی قطعی می‌شود که در پنجره‌های پیاپی پایدار باشد، رقیب هم‌زمان نداشته باشد و از لبه خارج نشده باشد؛ نوسان نمایش کمتر می‌شود"),
         )
+
+        # ---------- ثبت صوتی واژه (قرینه‌ی تب پیشرفته CTk) ----------
+        self.var_enroll = ft.Switch(value=bool(cfg.get("enroll_alias")),
+                                    active_color=t.ACCENT, scale=0.9,
+                                    on_change=self._sync_enroll_ui)
+        self.enroll_stable_note = ft.Text(
+            "«متن زنده پایدار» روشن است — تا خاموشش نکنی این لایه روی خروجی زنده و نهایی اعمال نمی‌شود",
+            style=t.fam("Regular", 12), color=t.WARN,
+            text_align=ft.TextAlign.RIGHT, visible=bool(cfg.get("stable_live")))
+        self.enroll_list = ft.Column(spacing=4)
+        self.enroll_add_btn = ft.Button(
+            content="+ ثبت واژه جدید", on_click=lambda e: self._open_enroll_editor(),
+            width=140, height=34, bgcolor=t.SURFACE_2, color=t.FG,
+            style=t.btn_style(weight="bold"),
+        )
+        self._enroll_store = _load_enroll_store()
+        c_enroll = t.card(
+            "ثبت صوتی واژه",
+            ft.Row([t.row_label("اصلاح واژه‌های ثبت‌شده در خروجی"), self.var_enroll]),
+            self.enroll_stable_note,
+            t.dim("اثر هم روی متن زنده و هم روی متن نهایی دارد؛ در حالت «متن زنده پایدار» اعمال نمی‌شود"),
+            self.enroll_list,
+            ft.Row([self.enroll_add_btn], alignment=ft.MainAxisAlignment.END),
+        )
+        self._enroll_list_card = c_enroll
+        self._rebuild_enroll_list()
+
+        # ادیتور واژه — پنل جدای درون‌صفحه‌ای (فلت دیالوگ Toplevel ندارد)؛
+        # موقع باز شدن، کارت فهرست مخفی می‌شود
+        self._enroll_editor_card = t.card("ثبت واژه جدید", ft.Column(spacing=6))
+        self._enroll_editor_card.visible = False
 
         c_info = t.card(
             "درباره موتور تشخیص",
@@ -740,7 +787,393 @@ class SettingsWindow:
             t.dim("کاملاً آفلاین — ۱۱۴ میلیون پارامتر (معماری FastConformer)"),
             t.dim("کیفیت روی جملات دیکته‌شده بهتر از مکالمه آزاد است"),
         )
-        return ft.Column([c_proc, c_hw, c_stable, c_info], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
+        self._sync_enroll_ui()
+        return ft.Column([c_proc, c_hw, c_stable, c_enroll,
+                          self._enroll_editor_card, c_info],
+                         spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
+
+    # ================= ثبت صوتی واژه (قرینه‌ی open_enroll_dialog در CTk) =================
+
+    def _sync_enroll_ui(self, e=None):
+        """در حالت پایدار، لایه‌ی ثبت واژه اعمال نمی‌شود — سوییچ و ضبط
+        غیرفعال می‌شوند و نکته‌اش دیده می‌شود (قرینه‌ی _sync_enroll_ui در CTk)."""
+        stable = bool(self.var_stable.value)
+        self.var_enroll.disabled = stable
+        off = stable or not bool(self.var_enroll.value)
+        self.enroll_add_btn.disabled = off
+        self.enroll_stable_note.visible = stable
+        self._safe_update(self.enroll_stable_note)
+        self._safe_update(self.var_enroll)
+
+    def _rebuild_enroll_list(self):
+        rows: list[ft.Control] = []
+        if not self._enroll_store.entries:
+            rows.append(t.dim("هنوز واژه‌ای ثبت نشده"))
+        for e in self._enroll_store.entries:
+            n_var = len(e.get("variants", []))
+            word = str(e.get("word", ""))
+            edit_btn = ft.Button(
+                content="ویرایش", width=64, height=26,
+                bgcolor=t.SURFACE_2, color=t.FG, style=t.btn_style(size=11),
+                on_click=lambda ev, wd=word: self._open_enroll_editor(wd),
+            )
+            del_btn = ft.Button(
+                content="حذف", width=56, height=26,
+                bgcolor=t.SURFACE_2, color=t.DANGER, style=t.btn_style(size=11),
+                on_click=lambda ev, wd=word: self._enroll_remove(wd),
+            )
+            rows.append(ft.Row([
+                del_btn, edit_btn,
+                ft.Text(f"«{word}» — {n_var} واریانت تأییدشده",
+                        style=t.fam("Regular", 13), color=t.FG,
+                        text_align=ft.TextAlign.RIGHT, expand=True),
+            ]))
+        self.enroll_list.controls = rows
+        self._safe_update(self.enroll_list)
+
+    def _enroll_remove(self, word: str):
+        self._enroll_store.remove_entry(word)
+        self._enroll_store.save()
+        self._rebuild_enroll_list()
+
+    def _open_enroll_editor(self, word: str | None = None):
+        """word=None → ثبت واژه جدید؛ str → ویرایش همان واژه.
+
+        فهرست مخفی و ادیتور نشان داده می‌شود — با ذخیره/انصراف برمی‌گردد.
+        """
+        entry = None
+        if word is not None:
+            entry = next((e for e in self._enroll_store.entries
+                          if str(e.get("word", "")) == word), None)
+        self._enroll_entry = entry
+        self._enroll_editing = True
+        self._enroll_busy = -1
+        self._enroll_playing = -1
+        self._enroll_heard = [str(v) for v in (entry or {}).get("variants", [])]
+        self._enroll_checks: dict[str, bool] = {}
+        self._enroll_slots = [{"samples": None, "rec": None, "t0": None,
+                               "play_t0": None, "play_dur": 0.0} for _ in range(3)]
+        self._enroll_result_q: queue.Queue = queue.Queue()
+        self._enroll_engine_loaded = False
+
+        self.en_word = ft.TextField(
+            value=str((entry or {}).get("word", "")),
+            height=38, border_radius=8, bgcolor=t.SURFACE_2,
+            border_color=t.BORDER, text_style=t.fam("Regular", 14), rtl=True,
+            content_padding=ft.Padding(left=10, top=8, right=10, bottom=8),
+        )
+        self.en_manual = ft.TextField(
+            height=32, border_radius=6, bgcolor=t.SURFACE_2,
+            border_color=t.BORDER, text_style=t.fam("Regular", 13), rtl=True,
+            content_padding=ft.Padding(left=8, top=6, right=8, bottom=6),
+        )
+        self.en_checks = ft.Column(spacing=2)
+        self.en_status = [ft.Text("—", style=t.fam("Regular", 12), color=t.FG_DIM,
+                                  text_align=ft.TextAlign.RIGHT, expand=True)
+                          for _ in range(3)]
+        self.en_play = [ft.Button(content="پخش", width=60, height=30,
+                                  bgcolor=t.SURFACE_2, color=t.FG,
+                                  style=t.btn_style(size=11), disabled=True,
+                                  on_click=lambda ev, i=i: self._enroll_play(i))
+                        for i in range(3)]
+        self.en_rec = [ft.Button(content=f"ضبط {'۱۲۳'[i]}", width=80, height=30,
+                                 bgcolor=t.SURFACE_2, color=t.FG,
+                                 style=t.btn_style(size=11, weight="bold"),
+                                 on_click=lambda ev, i=i: self._enroll_toggle_rec(i))
+                       for i in range(3)]
+        slot_rows = [ft.Row([st, pb, rb])
+                     for st, pb, rb in zip(self.en_status, self.en_play, self.en_rec)]
+
+        btn_save = ft.Button(content="ذخیره واژه", width=130, height=36,
+                             bgcolor=t.ACCENT, color=t.ON_ACCENT,
+                             style=t.btn_style(weight="bold"),
+                             on_click=self._enroll_save)
+        btn_cancel = ft.Button(content="انصراف", width=100, height=36,
+                               bgcolor=t.SURFACE_2, color=t.FG,
+                               style=t.btn_style(),
+                               on_click=lambda ev: self._close_enroll_editor())
+        editor_body = self._enroll_editor_card.content
+        editor_body.controls = [
+            ft.Text("واژه‌ی درست — همان‌طور که باید نوشته شود:",
+                    style=t.fam("Regular", 13), color=t.FG,
+                    text_align=ft.TextAlign.RIGHT),
+            self.en_word,
+            ft.Text("سه بار واضح بگو — ضبط را شروع کن، بگو، و قطع کن؛ بعد با پخش گوش بده:",
+                    style=t.fam("Regular", 13), color=t.FG,
+                    text_align=ft.TextAlign.RIGHT),
+            ft.Column(slot_rows, spacing=2),
+            self.en_checks,
+            ft.Row([
+                self.en_manual,
+                ft.Button(content="+ افزودن دستی", width=110, height=30,
+                          bgcolor=t.SURFACE_2, color=t.FG, style=t.btn_style(size=11),
+                          on_click=lambda ev: self._enroll_add_manual()),
+            ], spacing=6),
+            ft.Row([btn_cancel, ft.Container(expand=True), btn_save]),
+        ]
+        self._rebuild_enroll_checks()
+        # کارت فهرست ← مخفی؛ ادیتور ← نمایان
+        self._enroll_list_card.visible = False
+        self._enroll_editor_card.visible = True
+        self._safe_update(self._enroll_editor_card)
+        self._start_enroll_poll()
+
+    def _close_enroll_editor(self):
+        self._enroll_editing = False
+        self._enroll_stop_recording_quiet()
+        self._enroll_editor_card.visible = False
+        if getattr(self, "_enroll_list_card", None) is not None:
+            self._enroll_list_card.visible = True
+        self._rebuild_enroll_list()
+        self._safe_update(self.enroll_list)
+
+    def _enroll_stop_recording_quiet(self):
+        for s in getattr(self, "_enroll_slots", []):
+            rec, s["rec"] = s["rec"], None
+            if rec is not None:
+                try:
+                    rec.stop()
+                except Exception:
+                    pass
+
+    def _rebuild_enroll_checks(self):
+        heard = self._enroll_heard
+        for v in list(self._enroll_checks):
+            if v not in heard:
+                del self._enroll_checks[v]
+        for v in heard:
+            self._enroll_checks.setdefault(v, True)
+        rows: list[ft.Control] = []
+        if not heard:
+            rows.append(t.dim("هنوز واریانتی نیست — ضبط کن یا دستی اضافه کن"))
+        else:
+            rows.append(t.dim("شکل‌های شنیده‌شده — هر کدام را تأیید می‌کنی در خروجی جای واژه‌ی درست می‌نشیند:"))
+            for v in heard:
+                cb = ft.Checkbox(label=f"«{v}»", value=self._enroll_checks[v],
+                                 active_color=t.ACCENT, label_style=t.fam("Regular", 12),
+                                 on_change=lambda ev, vv=v: self._enroll_checks.update({vv: bool(ev.control.value)}))
+                rows.append(cb)
+        self.en_checks.controls = rows
+        self._safe_update(self.en_checks)
+
+    def _enroll_add_manual(self):
+        # افزودن دستی واریانت — شکل شنیده‌شده را که در متن زنده دیدی،
+        # بدون ضبط مجدد همین‌جا تایپ کن؛ دقیق‌ترین منبع واریانت همان متن زنده است
+        v = (self.en_manual.value or "").strip()
+        if len(v) < 2:
+            return
+        if v not in self._enroll_heard:
+            self._enroll_heard.append(v)
+        self.en_manual.value = ""
+        self._rebuild_enroll_checks()
+        self._safe_update(self.en_manual)
+
+    def _enroll_engine(self):
+        """موتور دیکد واریانت‌ها — بار اول در همین پروسه لود می‌شود.
+
+        تنظیمات پروسه‌ی جداست و به موتور اپ دسترسی ندارد؛ لود تنبل
+        چند ثانیه طول می‌کشد و فقط برای همین نشست کش می‌شود.
+        فقط از ترد کارگر صدا زده می‌شود — هیچ دسترسی UI اینجا ممنوع.
+        """
+        if not getattr(self, "_enroll_engine_loaded", False):
+            from app.asr import load_engine
+            from app.config import model_dir
+            engine = load_engine(
+                model_dir=model_dir(),
+                num_threads=int((self.cfg or {}).get("num_threads") or 4))
+            self._enroll_engine_obj = engine
+            self._enroll_engine_loaded = True
+        return self._enroll_engine_obj
+
+    def _enroll_status(self, slot: int, text: str, color: str):
+        self.en_status[slot].value = text
+        self.en_status[slot].color = color
+        self._safe_update(self.en_status[slot])
+
+    def _enroll_device(self) -> int | None:
+        """دستگاه ضبط ثبت واژه — کمبو → env بک‌اند → پیش‌فرض سیستم."""
+        dev = self._selected_device()
+        if dev is not None:
+            return dev
+        try:
+            return int(os.environ.get("DIKTEYAR_DEVICE") or "")
+        except ValueError:
+            return None
+
+    def _enroll_toggle_rec(self, slot: int):
+        if self._enroll_busy == slot:
+            self._enroll_stop_rec(slot)
+            return
+        if self._enroll_busy >= 0:
+            return
+        word = (self.en_word.value or "").strip()
+        if not word:
+            self._enroll_status(slot, "اول واژه‌ی درست را بنویس", t.DANGER)
+            return
+        try:
+            from app.recorder import Recorder
+            rec = Recorder(device=self._enroll_device(), block_ms=50)
+            rec.start()  # همان مسیر ضبط دیکته — سریع و بی‌probe
+        except Exception as e:
+            self._enroll_status(slot, f"خطا: {str(e)[:50]}", t.DANGER)
+            return
+        self._enroll_busy = slot
+        self._enroll_slots[slot]["rec"] = rec
+        self._enroll_slots[slot]["t0"] = time.monotonic()
+        self.en_rec[slot].content = "توقف"
+        self.en_rec[slot].bgcolor = t.DANGER
+        self.en_play[slot].disabled = True
+        for j, b in enumerate(self.en_rec):
+            if j != slot:
+                b.disabled = True
+        self._enroll_status(slot, "در حال ضبط…", t.WARN)
+
+    def _enroll_stop_rec(self, slot: int):
+        s = self._enroll_slots[slot]
+        rec, s["rec"] = s["rec"], None
+        s["t0"] = None
+        self._enroll_busy = -1
+        if rec is None:
+            return
+        rec.stop()
+        data = s["samples"] = rec.get_buffer_16k()
+        # بدون این، دکمه پخش برای همیشه disabled می‌ماند — ریشه‌ی
+        # «پخش کار نمی‌کند»؛ حتی ضبط کوتاه برای تشخیص قابل پخش است
+        self.en_play[slot].disabled = False
+        self.en_rec[slot].content = f"ضبط {'۱۲۳'[slot]}"
+        self.en_rec[slot].bgcolor = t.SURFACE_2
+        for b in self.en_rec:
+            b.disabled = False
+        self._safe_update(self.en_rec[slot])
+        self._safe_update(self.en_play[slot])
+        if data.size < 0.3 * 16000:
+            self._enroll_status(slot, "ضبط خیلی کوتاه بود — دوباره ضبط کن", t.WARN)
+            return
+        # word همین‌جا در ترد اصلی خوانده می‌شود — TextField.value از
+        # ترد کارگر امن نیست
+        word = (self.en_word.value or "").strip()
+        if not getattr(self, "_enroll_engine_loaded", False):
+            self._enroll_status(slot, "در حال بارگذاری موتور… (بار اول چند ثانیه)",
+                                t.WARN)
+        else:
+            self._enroll_status(slot, "در حال پردازش…", t.WARN)
+        threading.Thread(target=self._enroll_decode_worker,
+                         args=(slot, data, word), daemon=True).start()
+
+    def _enroll_decode_worker(self, slot: int, data, word: str):
+        # هیچ دسترسی UI اینجا ممنوع — فقط صف؛ رندر با حلقه‌ی poll
+        try:
+            engine = self._enroll_engine()
+            text = str(engine.transcribe(data, 16000) or "")
+            from app import enroll as enroll_mod
+            variants = enroll_mod.harvest_variants(
+                engine, data, word, text=text)
+            self._enroll_result_q.put(("done", slot, text, variants))
+        except Exception as e:
+            self._enroll_result_q.put(("err", slot, str(e)[:60], []))
+
+    def _enroll_play(self, slot: int):
+        import sounddevice as sd
+
+        s = self._enroll_slots[slot]
+        data = s["samples"]
+        if data is None or not data.size:
+            return
+        if self._enroll_playing == slot:  # در حال پخش — قطع
+            sd.stop()
+            self._enroll_playing = -1
+            self.en_play[slot].content = "پخش"
+            self._safe_update(self.en_play[slot])
+            return
+        sd.stop()
+        # ضبط میکروفون معمولاً خیلی کم‌صدا است — برای پخش به peak
+        # نرمال می‌شود (سقف تقویت ×۳۰)
+        out = data
+        peak = float(np.abs(data).max())
+        if 0.0 < peak < 0.15:
+            out = np.clip(data * min(30.0, 0.5 / peak), -1.0, 1.0)
+        try:
+            sd.play(out, 16000)
+        except Exception as e:
+            self._enroll_status(slot, f"خطای پخش: {str(e)[:40]}", t.DANGER)
+            return
+        self._enroll_playing = slot
+        s["play_t0"] = time.monotonic()
+        s["play_dur"] = data.size / 16000.0
+        self.en_play[slot].content = "قطع"
+        self._safe_update(self.en_play[slot])
+
+    def _start_enroll_poll(self):
+        """حلقه‌ی poll ادیتور — روی ایونت‌لوپ فلت (قرینه‌ی dlg.after در CTk)."""
+        run_task = getattr(self.page, "run_task", None)
+        if run_task is not None:
+            self._enroll_task = run_task(self._enroll_poll_loop)
+        else:
+            # MockPage (تست‌ها): بدون ایونت‌لوپ — تایمر
+            self._enroll_poll_timer()
+
+    async def _enroll_poll_loop(self):
+        try:
+            while self._enroll_editing:
+                self._enroll_poll_tick()
+                await asyncio.sleep(0.1)
+        except Exception:
+            pass  # صفحه/پنجره بسته شده
+
+    def _enroll_poll_timer(self):
+        if not self._enroll_editing:
+            return
+        self._enroll_poll_tick()
+        import threading
+        tm = threading.Timer(0.1, self._enroll_poll_timer)
+        tm.daemon = True
+        tm.start()
+
+    def _enroll_poll_tick(self):
+        try:
+            while True:
+                kind, slot, payload, variants = self._enroll_result_q.get_nowait()
+                if kind == "err":
+                    self._enroll_status(slot, f"خطا: {payload}", t.DANGER)
+                else:
+                    new = [v for v in variants if v not in self._enroll_heard]
+                    self._enroll_heard.extend(new)
+                    shown = payload.strip() or "چیزی شنیده نشد"
+                    self._enroll_status(slot, f"شنیده شد: {shown}",
+                                        t.ACCENT if new else t.WARN)
+                    self._rebuild_enroll_checks()
+        except queue.Empty:
+            pass
+        # سقف ایمنی ضبط — توقف خودکار پس از REC_MAX_SEC
+        busy = self._enroll_busy
+        if busy >= 0:
+            s = self._enroll_slots[busy]
+            if s["t0"] is not None and time.monotonic() - s["t0"] > REC_MAX_SEC:
+                self._enroll_stop_rec(busy)
+        # پایان طبیعی پخش — بدون این، فشار بعدی «قطع» می‌شد و صدا نمی‌داد
+        pl = self._enroll_playing
+        if pl >= 0:
+            s = self._enroll_slots[pl]
+            if s["play_t0"] is not None and \
+                    time.monotonic() - s["play_t0"] > s["play_dur"] + 0.3:
+                self._enroll_playing = -1
+                self.en_play[pl].content = "پخش"
+                self._safe_update(self.en_play[pl])
+
+    def _enroll_save(self, e=None):
+        word = (self.en_word.value or "").strip()
+        if len(word) < 2:
+            return
+        checked = [v for v, ok in self._enroll_checks.items() if ok]
+        from app import enroll as enroll_mod
+        if self._enroll_entry is not None and \
+                enroll_mod.norm_word(str(self._enroll_entry.get("word", ""))) != \
+                enroll_mod.norm_word(word):
+            # متن واژه عوض شده — مدخل با نام قبلی حذف شود
+            self._enroll_store.remove_entry(str(self._enroll_entry.get("word", "")))
+        self._enroll_store.add_entry(word, checked)
+        self._enroll_store.save()
+        self._close_enroll_editor()
 
     # ================================================= راهنما
     def _tab_help(self):

@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from app import fa_post, persian_itn, voice_commands
+from app import enroll, fa_post, persian_itn, voice_commands
 from app.asr import DirectCtcAsrEngine, LiveTranscriber, SpeechGate, load_engine
 from app.config import Config, model_dir, set_autostart
 from app.paster import insert_text, send_key
@@ -101,6 +101,8 @@ class DictationApp:
         self._silence_t0 = None  # زمان شروع سکوت فعلی (برای توقف خودکار)
         self._engine_dirty = False  # هات‌وورد عوض شده — پس از ضبط rebuild شود
         self._hotkey_registered = ""
+        self._alias_map: dict[str, str] = {}  # واژه‌های ثبت‌شده — شکل شنیده → درست
+        self.refresh_alias_map()
         self._settings_proc: subprocess.Popen | None = None
 
         # پنجره زنده (Overlay) — Tk فقط از thread خودش؛ فرمان‌ها با صف
@@ -169,7 +171,30 @@ class DictationApp:
             words = list(self.cfg.get("hotwords") or [])
         except Exception:
             words = []
-        return [str(w) for w in words if len(str(w).strip()) >= 2]
+        out = [str(w) for w in words if len(str(w).strip()) >= 2]
+        # واژه‌های ثبت‌صوتی هم به تقویت beam search می‌روند تا مدل از
+        # منبع به سمت شکل درست سوق پیدا کند (فقط وقتی هر دو حالت روشن‌اند)
+        if self.cfg.get("hotword_boost") and self.cfg.get("enroll_alias"):
+            try:
+                for e in enroll.EnrollStore.load().active():
+                    w = str(e.get("word", "")).strip()
+                    if len(w) >= 2 and w not in out:
+                        out.append(w)
+            except Exception:
+                pass
+        return out
+
+    def refresh_alias_map(self):
+        """بازخوانی نگاشت واژه‌های ثبت‌شده از دیسک — بعد از افزودن/حذف در تنظیمات."""
+        try:
+            if self.cfg.get("enroll_alias"):
+                self._alias_map = enroll.build_alias_map(
+                    enroll.EnrollStore.load().active()
+                )
+                return
+        except Exception:
+            pass
+        self._alias_map = {}
 
     def _default_engine_loader(self):
         """موتور متناسب با تنظیمات: هات‌وورد (beam) یا عادی — قرینه‌ی App."""
@@ -395,6 +420,11 @@ class DictationApp:
                             buf, t_offset=max(
                                 0.0, rec.duration_sec() - buf.size / 16000.0))
                         text = post(res.text)
+                        # ثبت صوتی واژه در حالت پایدار اعمال نمی‌شود: گویش
+                        # دیکد beam-2 با گویشی که واریانت‌ها برداشت شده‌اند
+                        # فرق دارد و جایگزینی ناپایدارِ نمایش می‌سازد
+                        if self._alias_map and not self.cfg.get("stable_live"):
+                            text = enroll.apply_aliases(text, self._alias_map)
                         # دنباله‌ی قطعی‌نشده: واژه‌های پنجره‌ی جاری — overlay
                         # این‌ها را کم‌رنگ نشان می‌دهد. تا وقتی پیشوندی قفل
                         # نشده کل نمایش یکدست می‌ماند. شمارش بعد از همان
@@ -457,6 +487,8 @@ class DictationApp:
             text = persian_itn.normalize_text(text, min_tokens=2)
         if self.cfg.get("rejoin_prefixes"):
             text = fa_post.rejoin_prefixes(text)
+        if self._alias_map and not self.cfg.get("stable_live"):
+            text = enroll.apply_aliases(text, self._alias_map)
         method = self.cfg.get("paste_method")
         restore = bool(self.cfg.get("restore_clipboard"))
         if self.cfg.get("voice_commands"):
@@ -507,6 +539,7 @@ class DictationApp:
         # پنجره تنظیمات کپی خودش را روی دیسک می‌نویسد؛ تنظیمات تازه باید از دیسک خوانده شود
         self.cfg = Config.load()
         new_key = self._engine_key
+        self.refresh_alias_map()  # واریانت‌های ثبت‌شده ممکن است عوض شده باشند
         if self._register_hotkey_enabled:
             self.apply_hotkey()
         set_autostart(bool(self.cfg.get("autostart")))

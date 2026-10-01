@@ -207,6 +207,21 @@ class BackendCycle(unittest.TestCase):
         self.assertTrue(any("تشخیص داده نشد" in s for s in win.statuses),
                         "باید پیام اطلاع بدهد")
 
+    def test_alias_map_applied_unless_stable(self):
+        # واژه‌های ثبت‌صوتی روی درج نهایی اعمال می‌شوند؛ در حالت
+        # متن زنده پایدار این لایه عمداً خاموش است (گویش beam-2)
+        app, _, _, inserted = make_app()
+        app.start()
+        wait_for(lambda: app.state == STATE_IDLE)
+        app._alias_map = {"ویسپرفارسی": "دیکته‌یار"}
+        app.cfg.set("stable_live", False)
+        app._insert("ويسپر فارسی خوب است")
+        self.assertEqual(inserted, ["دیکته‌یار خوب است"])
+        app.cfg.set("stable_live", True)
+        app._insert("ويسپر فارسی خوب است")
+        # ITN حرف عربی ي را به فارسی ی نرمال می‌کند — بدون جایگزینی
+        self.assertEqual(inserted[-1], "ویسپر فارسی خوب است")
+
     def test_voice_commands_routing(self):
         from unittest.mock import patch
         from app.voice_commands import Segment
@@ -249,17 +264,32 @@ class BackendConfig(unittest.TestCase):
         saved.save()
 
     def test_engine_key_reflects_hotword_settings(self):
-        app, _, _, _ = make_app()
-        k0 = app._engine_key
-        app.cfg.set("hotword_boost", True)
-        app.cfg.set("hotwords", ["نیما", "x", "ويسپر"])
-        k1 = app._engine_key
-        self.assertNotEqual(k0, k1)
-        # واژه‌ی تک‌حرفی فیلتر می‌شود
-        self.assertEqual(k1, (True, ("نیما", "ويسپر"), False))
-        # تغییر متن زنده پایدار هم موتور را عوض می‌کند
-        app.cfg.set("stable_live", True)
-        self.assertNotEqual(k1, app._engine_key)
+        # فروشگاه ثبت واژه به مسیر خالی می‌رود — نتایج نباید به
+        # enrollments.json واقعی ماشین وابسته باشند
+        import tempfile
+        from pathlib import Path as _P
+        from unittest import mock
+        from app import enroll as _enroll_mod
+        fake = _P(tempfile.gettempdir()) / "dikteyar-tests-no-enrollments.json"
+        with mock.patch.object(_enroll_mod, "store_path", lambda: fake):
+            app, _, _, _ = make_app()
+            k0 = app._engine_key
+            app.cfg.set("hotword_boost", True)
+            app.cfg.set("hotwords", ["نیما", "x", "ويسپر"])
+            k1 = app._engine_key
+            self.assertNotEqual(k0, k1)
+            # واژه‌ی تک‌حرفی فیلتر می‌شود
+            self.assertEqual(k1, (True, ("نیما", "ويسپر"), False))
+            # واژه‌های ثبت‌صوتی هم به هات‌وورد اضافه می‌شوند (هر دو حالت روشن)
+            _enroll_mod.store_path().write_text(
+                '{"entries": [{"word": "دیکته‌یار", "variants": ["ویسپر فلوی فارسی"]}]}',
+                encoding="utf-8")
+            k2 = app._engine_key
+            self.assertEqual(k2, (True, ("نیما", "ويسپر", "دیکته‌یار"), False))
+            # تغییر متن زنده پایدار هم موتور را عوض می‌کند
+            app.cfg.set("stable_live", True)
+            self.assertNotEqual(k2, app._engine_key)
+            fake.unlink(missing_ok=True)
 
     def test_rebuild_engine_while_recording_defers(self):
         app, win, _, _ = make_app()

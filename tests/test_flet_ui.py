@@ -408,6 +408,55 @@ class TestSettingsWindow(SettingsTestBase):
         for key in DEFAULTS:
             self.assertIn(key, d, key)
 
+    # ---------- ثبت صوتی واژه ----------
+
+    def _isolated_enroll_store(self):
+        """فروشگاه ثبت واژه روی فایل موقت — بدون دست‌زدن به داده‌ی واقعی."""
+        import tempfile
+        from pathlib import Path as _P
+        from unittest import mock
+        from app import enroll as _enroll_mod
+        fake = _P(tempfile.gettempdir()) / "dikteyar-tests-enroll-ui.json"
+        fake.unlink(missing_ok=True)
+        cm = mock.patch.object(_enroll_mod, "store_path", lambda: fake)
+        return cm, _enroll_mod, fake
+
+    def test_enroll_editor_open_add_manual_save(self):
+        # ادیتور درون‌صفحه‌ای: باز شدن فهرست را مخفی می‌کند؛ واریانت دستی
+        # به فهرست تأییدها می‌آید؛ ذخیره، مدخل را روی دیسک می‌نویسد و برمی‌گردد
+        cm, enroll_mod, fake = self._isolated_enroll_store()
+        with cm:
+            self.win._enroll_store = enroll_mod.EnrollStore.load()
+            self.win._open_enroll_editor()
+            self.assertTrue(self.win._enroll_editor_card.visible)
+            self.assertFalse(self.win._enroll_list_card.visible)
+            self.assertTrue(self.win._enroll_editing)
+            self.win.en_word.value = "دیکته‌یار"
+            self.win.en_manual.value = "ویسپر فارسی"
+            self.win._enroll_add_manual()
+            self.assertIn("ویسپر فارسی", self.win._enroll_heard)
+            self.assertTrue(self.win._enroll_checks["ویسپر فارسی"])
+            self.win._enroll_save()
+            self.assertFalse(self.win._enroll_editor_card.visible)
+            self.assertTrue(self.win._enroll_list_card.visible)
+            self.assertFalse(self.win._enroll_editing)
+            saved = enroll_mod.EnrollStore.load()
+            self.assertEqual([e["word"] for e in saved.entries], ["دیکته‌یار"])
+            self.assertIn("ویسپر فارسی", saved.entries[0]["variants"])
+            fake.unlink(missing_ok=True)
+
+    def test_enroll_ui_disabled_in_stable_mode(self):
+        # در حالت متن زنده پایدار، لایه‌ی ثبت واژه اعمال نمی‌شود —
+        # سوییچ غیرفعال و نکته‌ی هشدار دیده می‌شود (قرینه‌ی CTk)
+        self.win.var_stable.value = True
+        self.win._sync_enroll_ui()
+        self.assertTrue(self.win.var_enroll.disabled)
+        self.assertTrue(self.win.enroll_stable_note.visible)
+        self.win.var_stable.value = False
+        self.win._sync_enroll_ui()
+        self.assertFalse(self.win.var_enroll.disabled)
+        self.assertFalse(self.win.enroll_stable_note.visible)
+
     def test_spectrum_bars_are_in_stack_with_fixed_left(self):
         # باگ رگرسیون: میله‌ها در Row با layout-END بودند و تغییر height کل
         # TabBarView را باز-layout می‌کرد → انیمیشن بی‌حرکت. الان Stack با
