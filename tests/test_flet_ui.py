@@ -489,6 +489,24 @@ class TestSettingsWindow(SettingsTestBase):
         self.assertTrue(all(b.height == 3 for b in self.win._bars))
         self.assertEqual(self.win.test_btn.content, "شروع تست")
 
+    def test_tester_tried_chain_is_indices(self):
+        # رگرسیون: زنجیره‌ی تست باید ایندکس باشد — استخراج دوباره‌ی
+        # e['index'] روی int خطای «'int' object is not subscriptable»
+        # می‌داد و کل تست صدا همان اول می‌مرد
+        devices = getattr(self.win, "_devices", [])
+        if not devices:
+            self.skipTest("دستگاه ورودی در این محیط یافت نشد")
+        idx, label = devices[0]
+        tried = self.win._tester_tried(idx)
+        self.assertEqual(tried[0], idx)
+        for d in tried:
+            self.assertIsInstance(d, int)
+        # مسیرهای جایگزین = خروجی device_siblings همان دستگاه
+        from app.recorder import current_input_devices, device_siblings
+        expected = [e["index"] for e in
+                    device_siblings(self.win._all_inputs, idx)]
+        self.assertEqual(tried[1:], expected)
+
     def test_animation_silence_shows_no_signal(self):
         # بدون صدا: RMS=0 → حکم قرمز «سیگنالی نمی‌آید»؛ موج پایه‌ی نفس
         # عمداً زنده است (تا کاربر بفهمد تست اجراست) ولی دامنه‌ی محدود —

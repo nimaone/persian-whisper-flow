@@ -425,6 +425,18 @@ class SettingsWindow:
             return False
 
     # ---------- تست صدا: ضبط واقعی RMS (قرینه‌ی MicTester در CTk) ----------
+    def _tester_tried(self, dev: int | None) -> list:
+        """زنجیره‌ی تست صدا: مسیر اصلی → مسیرهای دیگر Host API همان
+        میکروفون فیزیکی — شکست یک مسیر تست را کلاً نمی‌اندازد."""
+        try:
+            from app.recorder import current_input_devices, device_siblings
+            inputs = getattr(self, "_all_inputs", []) or current_input_devices()
+            self._test_fallbacks = [e["index"] for e in
+                                    device_siblings(inputs, dev)]
+        except Exception:
+            self._test_fallbacks = []
+        return [dev] + list(self._test_fallbacks)
+
     def _start_tester(self):
         """MicTester را روی دستگاه انتخابی روشن کن؛ زنجیره‌ی جایگزین
         (مسیرهای دیگر Host API همان میکروفون) اگر مسیر اصلی باز نشود.
@@ -461,22 +473,12 @@ class SettingsWindow:
                     dev = int(sd.default.device[0])
         # مسیرهای جایگزین همان میکروفون فیزیکی — اگر مسیر اصلی
         # باز نشود، تست روی مسیر دیگر (مثلاً WASAPI) می‌رود
-        try:
-            from app.recorder import current_input_devices, device_siblings
-            inputs = getattr(self, "_all_inputs", []) or current_input_devices()
-            self._test_fallbacks = [e["index"] for e in
-                                    device_siblings(inputs, dev)]
-        except Exception:
-            self._test_fallbacks = []
+        tried = self._tester_tried(dev)
 
         def run():
             import numpy as np
             try:
                 import sounddevice as sd
-                # زنجیره‌ی تست: مسیر اصلی → مسیرهای دیگر همان میکروفون —
-                # شکست یک مسیر تست را کلاً نمی‌اندازد (قرینه‌ی ضبط)
-                tried = [dev] + [e["index"] for e in
-                                 getattr(self, "_test_fallbacks", [])]
                 last_err: Exception | None = None
                 for d in tried:
                     try:
