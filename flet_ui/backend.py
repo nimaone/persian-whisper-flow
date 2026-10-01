@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 
 from app import fa_post, persian_itn, voice_commands
-from app.asr import LiveTranscriber, load_engine
+from app.asr import DirectCtcAsrEngine, LiveTranscriber, SpeechGate, load_engine
 from app.config import Config, model_dir, set_autostart
 from app.paster import insert_text, send_key
 from app.recorder import Recorder, detect_best_device
@@ -36,6 +36,7 @@ STATE_TRANSCRIBING = "transcribing"
 
 PARTIAL_INTERVAL = 0.8  # ثانیه بین ترنسکرایپ‌های زنده
 SILENCE_RMS = 0.003     # آستانه سکوت برای توقف خودکار
+SPEECH_GATE_HANGOVER = 1.5  # ثانیه decode اضافه پس از آخرین صدا
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -97,16 +98,20 @@ class DictationApp:
             self._overlay_ready.set()
             return  # بدون overlay هم برنامه کار می‌کند
         self._overlay_ready.set()
+        tail_n = 0  # واژه‌های قطعی‌نشده — «tail» همیشه پیش از «text» می‌آید
         while self._running:
             try:
                 while True:
                     op, arg = self._ov_q.get_nowait()
                     if op == "show":
+                        tail_n = 0
                         self._overlay.set_font_size(
                             int(self.cfg.get("overlay_font_size") or 15))
                         self._overlay.show()
+                    elif op == "tail":
+                        tail_n = int(arg or 0)
                     elif op == "text":
-                        self._overlay.update_text(arg)
+                        self._overlay.update_text(arg, tail_n)
                     elif op == "processing":
                         self._overlay.set_processing()
                     elif op == "hide":
@@ -156,6 +161,17 @@ class DictationApp:
                 )
             except Exception as e:
                 self._notify(f"حالت واژه‌های حساس فعال نشد؛ موتور عادی: {str(e)[:60]}")
+        # اگر متن پایدار خواسته شده، به‌جای sherpa + session دوم،
+        # یک session ONNX برای هم transcribe و هم امتیازدهی لود می‌کنیم.
+        if bool(self.cfg.get("stable_live")):
+            try:
+                return DirectCtcAsrEngine(
+                    model_dir=model_dir(),
+                    num_threads=int(self.cfg.get("num_threads") or 4),
+                    beam_width=2,
+                )
+            except Exception as e:
+                self._notify(f"موتور متن پایدار فعال نشد؛ موتور عادی: {str(e)[:60]}")
         return load_engine(model_dir=model_dir(),
                            num_threads=int(self.cfg.get("num_threads") or 4))
 
@@ -163,7 +179,8 @@ class DictationApp:
         for attempt in range(3):
             try:
                 self.engine = self._engine_loader()
-                self.live = LiveTranscriber(self.engine)
+                self.live = LiveTranscriber(
+                    self.engine, stable_live=bool(self.cfg.get("stable_live")))
                 with self._state_lock:
                     if self.state in (STATE_LOADING, STATE_STARTING):
                         self.state = STATE_IDLE
@@ -277,6 +294,10 @@ class DictationApp:
         with self._state_lock:
             self.state = STATE_RECORDING
         self._silence_t0 = None
+        if self.live is not None:
+            # گزینه‌ی متن پایدار در شروع هر ضبط از تنظیمات تازه خوانده می‌شود
+            self.live.configure(bool(self.cfg.get("stable_live")))
+            self.live.reset()
         self._ui_set_state(STATE_RECORDING)
         if self.cfg.get("sound_feedback"):
             _beep(start=True)
@@ -304,6 +325,16 @@ class DictationApp:
         """ترنسکرایپ زنده — نتیجه با set_status در پنجره کنترل دیده می‌شود."""
         auto_stop = float(self.cfg.get("auto_stop_sec") or 0)
         speech_seen = False
+        gate = SpeechGate(SILENCE_RMS, hangover=SPEECH_GATE_HANGOVER)
+
+        def post(t: str) -> str:
+            """پس‌پردازش متن زنده — همان چیزی که درج نهایی هم می‌بیند."""
+            if self.cfg.get("persian_itn"):
+                t = persian_itn.normalize_text(t, min_tokens=2)
+            if self.cfg.get("rejoin_prefixes"):
+                t = fa_post.rejoin_prefixes(t)
+            return t
+
         while self._running:
             with self._state_lock:
                 if self.state != STATE_RECORDING:
@@ -313,12 +344,26 @@ class DictationApp:
             if rec is not None and self.live is not None:
                 try:
                     buf = rec.get_tail_16k(self.live.window_sec)
-                    text = self.live.partial(buf)
-                    if self.cfg.get("persian_itn"):
-                        text = persian_itn.normalize_text(text, min_tokens=2)
-                    if self.cfg.get("rejoin_prefixes"):
-                        text = fa_post.rejoin_prefixes(text)
-                    self._ov("text", text)
+                    gate_rms = float(np.sqrt(
+                        (buf[-int(0.25 * 16000):].astype(np.float64) ** 2).mean()
+                    )) if buf.size else 0.0
+                    if gate.should_decode(gate_rms, now=t0):
+                        res = self.live.partial_result(
+                            buf, t_offset=max(
+                                0.0, rec.duration_sec() - buf.size / 16000.0))
+                        text = post(res.text)
+                        # دنباله‌ی قطعی‌نشده: واژه‌های پنجره‌ی جاری — overlay
+                        # این‌ها را کم‌رنگ نشان می‌دهد. تا وقتی پیشوندی قفل
+                        # نشده کل نمایش یکدست می‌ماند. شمارش بعد از همان
+                        # پس‌پردازشی است که روی کل متن خورد (ITN/rejoin
+                        # واژه می‌چسبانند و تعداد را جابه‌جا می‌کنند).
+                        tail_n = 0
+                        words = res.text.split()
+                        if 0 < len(res.words) < len(words):
+                            tail_n = len(post(" ".join(
+                                words[-len(res.words):])).split())
+                        self._ov("tail", tail_n)
+                        self._ov("text", text)
                     # توقف خودکار پس از سکوت — فقط اگر قبلاً صدایی شنیده شده
                     if auto_stop > 0:
                         recent = buf[-int(1.5 * 16000):]

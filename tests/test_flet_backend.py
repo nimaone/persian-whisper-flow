@@ -78,6 +78,10 @@ class FakeRecorder:
     def get_buffer_16k(self):
         return self._buf
 
+    def duration_sec(self):
+        """طول بافر بر حسب ثانیه — قرینه‌ی Recorder برای t_offset پنجره."""
+        return len(self._buf) / 16000.0
+
     def recent_rms(self):
         return self.level
 

@@ -623,6 +623,14 @@ class SettingsWindow:
             t.dim("با روشن‌کردن، پردازش کمی کندتر می‌شود و ممکن است نشانه‌های پایانی جمله (مثل نقطه) هم درج شوند"),
         )
 
+        self.var_stable = ft.Switch(value=bool(cfg.get("stable_live")),
+                                    active_color=t.ACCENT, scale=0.9)
+        c_stable = t.card(
+            "متن زنده پایدار — آزمایشی",
+            ft.Row([t.row_label("قفل‌کردن پیشوند با امتیاز اطمینان"), self.var_stable]),
+            t.dim("واژه فقط وقتی قطعی می‌شود که در پنجره‌های پیاپی پایدار باشد، رقیب هم‌زمان نداشته باشد و از لبه خارج نشده باشد؛ نوسان نمایش کمتر می‌شود"),
+        )
+
         c_info = t.card(
             "درباره موتور تشخیص",
             ft.Container(ft.Text("Shenava-Koochik v1.0", style=t.fam("bold", 13), color=t.FG,
@@ -631,7 +639,7 @@ class SettingsWindow:
             t.dim("کاملاً آفلاین — ۱۱۴ میلیون پارامتر (معماری FastConformer)"),
             t.dim("کیفیت روی جملات دیکته‌شده بهتر از مکالمه آزاد است"),
         )
-        return ft.Column([c_proc, c_hw, c_info], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
+        return ft.Column([c_proc, c_hw, c_stable, c_info], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
 
     # ================================================= راهنما
     def _tab_help(self):
@@ -682,6 +690,7 @@ class SettingsWindow:
             "overlay_font_size": int(self.var_font.value),
             "auto_stop_sec": auto_stop_labels.get(self.var_auto_stop.value, 0),
             "hotword_boost": hw_on,
+            "stable_live": bool(self.var_stable.value),
             "hotwords": [ln.strip() for ln in (self.txt_hotwords.value or "").splitlines()
                          if len(ln.strip()) >= 2],
         }
@@ -710,6 +719,7 @@ class SettingsWindow:
         self.var_paste.value = data.get("paste_method", "clipboard")
         self.var_commands.value = bool(data.get("voice_commands"))
         self.var_itn.value = bool(data.get("persian_itn"))
+        self.var_stable.value = bool(data.get("stable_live"))
         self.var_restore.value = bool(data.get("restore_clipboard"))
         self.var_sound.value = bool(data.get("sound_feedback"))
         self.var_overlay.value = bool(data.get("overlay_enabled"))
