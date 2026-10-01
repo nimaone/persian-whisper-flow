@@ -2,14 +2,14 @@
 ; بیلد:
 ;   ۱) .venv\Scripts\python.exe -m PyInstaller dikteyar.spec --noconfirm
 ;   ۲) ISCC.exe installer\dikteyar.iss
-; خروجی: installer\Output\DikteYar-Setup-1.1.0.exe
+; خروجی: installer\Output\DikteYar-Setup-1.2.0.exe
 ;
 ; طراحی per-user: نصب در LocalAppData بدون نیاز به دسترسی مدیر —
 ; (دانلود مدل در اولین اجرا و رجیستری autostart با admin دردسر می‌شوند)
 
 #define MyAppName "DikteYar"
 #define MyAppNameFa "دیکته‌یار"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "DikteYar contributors"
 #define MyAppExeName "DikteYar.exe"
 #define MyAppURL "https://github.com/nimaone/persian-whisper-flow"
