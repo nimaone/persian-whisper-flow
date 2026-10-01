@@ -557,9 +557,12 @@ def open_settings(parent_root, app=None):
     cs = card(t_adv, "متن زنده پایدار — آزمایشی")
     var_stable_live = tk.BooleanVar(value=bool(cfg.get("stable_live")))
     ctk.CTkSwitch(cs, text="قفل واژه‌های قطعی (رأی بین‌پنجره‌ای + امتیاز اطمینان)",
-                  variable=var_stable_live, **switch_style).pack(anchor="e", pady=(0, 6))
+                  variable=var_stable_live, command=lambda: _sync_enroll_ui(),
+                  **switch_style).pack(anchor="e", pady=(0, 6))
     dim(cs, "واژه فقط وقتی قطعی می‌شود که در پنجره‌های پیاپی پایدار باشد، رقیب هم‌زمان نداشته باشد و از لبه خارج نشده باشد؛ نوسان نمایش کمتر می‌شود")
+    dim(cs, "نمایش زنده = کل متن قفل‌شده + پنجره‌ی جاری؛ واژه‌های هنوز قطعی‌نشده کم‌رنگ‌تر دیده می‌شوند")
     dim(cs, "متن نهایی از مسیر جداگانه ساخته می‌شود و تحت تأثیر نیست؛ خروجی ممکن است کمی با حالت پیش‌فرض متفاوت باشد")
+    dim(cs, "در این حالت اصلاح واژه‌های ثبت‌شده (تب پیشرفته) روی خروجی زنده و نهایی اعمال نمی‌شود")
     dim(cs, "پیش‌فرض خاموش است؛ اگر وسط ضبط تغییرش دهید، بعد از پایان ضبط اعمال می‌شود")
 
     ch_hw = card(t_adv, "واژه‌های حساس (هات‌وورد) — آزمایشی")
@@ -576,14 +579,32 @@ def open_settings(parent_root, app=None):
 
     def _sync_enroll_ui():
         # تعریف قبل از دکمه، ولی بدنه در زمان فراخوانی resolve می‌شود
-        add_btn.configure(state="normal" if var_enroll.get() else "disabled")
+        stable = bool(var_stable_live.get())
+        # در حالت «متن زنده پایدار» این لایه روی خروجی زنده و نهایی اعمال
+        # نمی‌شود (گویش دیکد موتور پایدار با گویش واریانت‌ها فرق دارد)، پس
+        # کلید به‌جای روشن‌بودنِ بی‌اثر، غیرفعال نشان داده می‌شود.
+        sw_enroll.configure(state="disabled" if stable else "normal")
+        add_btn.configure(
+            state="normal" if (var_enroll.get() and not stable) else "disabled"
+        )
+        if stable:
+            lbl_stable_note.pack(fill="x", pady=(0, 4), before=enroll_list)
+        else:
+            lbl_stable_note.pack_forget()
 
     var_enroll = tk.BooleanVar(value=bool(cfg.get("enroll_alias")))
-    ctk.CTkSwitch(ce, text="اصلاح واژه‌های ثبت‌شده در خروجی",
-                  variable=var_enroll, command=_sync_enroll_ui,
-                  **switch_style).pack(anchor="e", pady=(0, 6))
+    sw_enroll = ctk.CTkSwitch(ce, text="اصلاح واژه‌های ثبت‌شده در خروجی",
+                              variable=var_enroll, command=_sync_enroll_ui,
+                              **switch_style)
+    sw_enroll.pack(anchor="e", pady=(0, 6))
     dim(ce, "واژه‌ای که مدل مدام اشتباه می‌شنود را ضبط کن؛ شکل‌های شنیده‌شده را تیک بزن تا در خروجی به واژه‌ی درست تبدیل شوند")
     dim(ce, "اثر هم روی متن زنده و هم روی متن نهایی دارد؛ در حالت «متن زنده پایدار» اعمال نمی‌شود")
+
+    lbl_stable_note = ctk.CTkLabel(
+        ce, text="«متن زنده پایدار» روشن است — تا خاموشش نکنی این لایه روی خروجی زنده و نهایی اعمال نمی‌شود",
+        font=(fam, 12), text_color=theme.WARN, justify="right", anchor="e",
+        wraplength=440,
+    )
 
     from app import enroll as enroll_mod
 
@@ -1047,18 +1068,42 @@ def open_settings(parent_root, app=None):
     # destroy بدون close (خطای نیمه‌راه در ساخت/کد خارجی) هم پوشش داده می‌شود
     win.bind("<Destroy>", _on_destroy)
 
-    ctk.CTkButton(btn_bar, text="بازنشانی", font=(fam, 13), height=40,
-                  width=100, corner_radius=8, fg_color=theme.SURFACE_2,
-                  hover_color=theme.SURFACE_3, text_color=theme.FG,
-                  command=reset).pack(side="left")
-    ctk.CTkButton(btn_bar, text="ذخیره", font=(fam, 13, "bold"), height=40,
-                  width=130, corner_radius=8, fg_color=theme.ACCENT,
-                  hover_color=theme.ACCENT_HOVER, text_color=theme.ON_ACCENT,
-                  command=save).pack(side="right", padx=(8, 0))
-    ctk.CTkButton(btn_bar, text="انصراف", font=(fam, 13), height=40,
-                  width=110, corner_radius=8, fg_color=theme.SURFACE_2,
-                  hover_color=theme.SURFACE_3, text_color=theme.FG,
-                  command=close).pack(side="right")
+    # سه دکمه هم‌عرض — بعد از چیدمان، ردیف با لبه‌ی کارت‌های تب تراز
+    # می‌شود: «ذخیره» از سمت شروع (راست) و «بازنشانی» تا انتهای ردیف (چپ).
+    btn_reset = ctk.CTkButton(btn_bar, text="بازنشانی", font=(fam, 13), height=40,
+                              width=100, corner_radius=8, fg_color=theme.SURFACE_2,
+                              hover_color=theme.SURFACE_3, text_color=theme.FG,
+                              command=reset)
+    btn_reset.pack(side="left")
+    btn_save = ctk.CTkButton(btn_bar, text="ذخیره", font=(fam, 13, "bold"), height=40,
+                             width=100, corner_radius=8, fg_color=theme.ACCENT,
+                             hover_color=theme.ACCENT_HOVER, text_color=theme.ON_ACCENT,
+                             command=save)
+    btn_save.pack(side="right", padx=(8, 0))
+    btn_close = ctk.CTkButton(btn_bar, text="انصراف", font=(fam, 13), height=40,
+                              width=100, corner_radius=8, fg_color=theme.SURFACE_2,
+                              hover_color=theme.SURFACE_3, text_color=theme.FG,
+                              command=close)
+    btn_close.pack(side="right")
+
+    def _align_btn_bar():
+        """هم‌عرض‌کردن سه دکمه و تراز لبه‌ی ردیف با کارت‌های تب —
+        بعد از اینکه چیدمان واقعی پنجره نشست."""
+        try:
+            inset = (tabview.tab("عمومی").winfo_rootx()
+                     - win.winfo_rootx()) + 2  # +2: padx کارت داخل تب
+            if inset <= 0:
+                return
+            btn_bar.configure(padx=inset)
+            inner_w = win.winfo_width() - 2 * inset
+            bw = max(80, (inner_w - 16) // 3)
+            for b in (btn_reset, btn_close, btn_save):
+                b.configure(width=bw)
+        except Exception:
+            pass
+
+    win.after(80, _align_btn_bar)
+    win.after(450, _align_btn_bar)  # بعد از settle نهایی smooth_show
 
     win.protocol("WM_DELETE_WINDOW", close)
     smooth_ctk.flush_pending(win)  # پرکردن بوم‌های خالی — دکمه‌ها از اولین فریم کامل

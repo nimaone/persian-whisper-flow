@@ -86,6 +86,7 @@ class App:
         self._tray = None
         self._hotkey_registered = ""
         self._silence_t0 = None  # زمان شروع سکوت فعلی (برای توقف خودکار)
+        self._live_tail = 0  # واژه‌های قطعی‌نشده‌ی نمایش زنده (کم‌رنگ در overlay)
         self._engine_dirty = False  # تنظیمات هات‌وورد عوض شده — پس از ضبط rebuild شود
         self._engine_rebuild_requested = False  # تغییر موتور در UI — بعد از بستن تنظیمات
         self._alias_map: dict[str, str] = {}  # واژه‌های ثبت‌شده — شکل شنیده → درست
@@ -374,6 +375,15 @@ class App:
         auto_stop = float(self.cfg.get("auto_stop_sec") or 0)
         speech_seen = False
         gate = SpeechGate(SILENCE_RMS, hangover=SPEECH_GATE_HANGOVER)
+
+        def post(t: str) -> str:
+            """پس‌پردازش متن زنده — همان چیزی که درج نهایی هم می‌بیند."""
+            if self.cfg.get("persian_itn"):
+                t = persian_itn.normalize_text(t, min_tokens=2)
+            if self.cfg.get("rejoin_prefixes"):
+                t = fa_post.rejoin_prefixes(t)
+            return t
+
         while self._running:
             with self._state_lock:
                 if self.state != STATE_RECORDING:
@@ -388,18 +398,26 @@ class App:
                     )) if buf.size else 0.0
                     should_decode = gate.should_decode(gate_rms, now=t0)
                     if should_decode:
-                        text = self.live.partial(
+                        res = self.live.partial_result(
                             buf, t_offset=max(
                                 0.0, rec.duration_sec() - buf.size / 16000.0))
-                        if self.cfg.get("persian_itn"):
-                            text = persian_itn.normalize_text(text, min_tokens=2)
-                        if self.cfg.get("rejoin_prefixes"):
-                            text = fa_post.rejoin_prefixes(text)
+                        text = post(res.text)
                         # ثبت صوتی واژه در حالت پایدار اعمال نمی‌شود: گویش
                         # دیکد beam-2 با گویشی که واریانت‌ها برداشت شده‌اند
                         # فرق دارد و جایگزینی ناپایدارِ نمایش می‌سازد
                         if self._alias_map and not self.cfg.get("stable_live"):
                             text = enroll.apply_aliases(text, self._alias_map)
+                        # دنباله‌ی قطعی‌نشده: واژه‌های پنجره‌ی جاری — overlay
+                        # این‌ها را کم‌رنگ نشان می‌دهد. تا وقتی پیشوندی قفل
+                        # نشده کل نمایش یکدست می‌ماند (چیزی برای مقایسه نیست).
+                        # شمارش بعد از همان پس‌پردازشی است که روی کل متن خورد
+                        # (ITN/rejoin واژه می‌چسبانند و تعداد را جابه‌جا می‌کنند).
+                        tail_n = 0
+                        words = res.text.split()
+                        if 0 < len(res.words) < len(words):
+                            tail_n = len(post(" ".join(
+                                words[-len(res.words):])).split())
+                        self.ui_q.put(("tail", tail_n))
                         self.ui_q.put(("text", text))
                     # توقف خودکار پس از سکوت — فقط اگر قبلاً صدایی شنیده شده
                     if auto_stop > 0:
@@ -490,6 +508,7 @@ class App:
                     break
                 try:
                     if op == "show":
+                        self._live_tail = 0
                         self.overlay.show()
                     elif op == "font":
                         self.overlay.set_font_size(arg)
@@ -499,8 +518,11 @@ class App:
                         self.overlay.hide()
                     elif op == "processing":
                         self.overlay.set_processing()
+                    elif op == "tail":
+                        # تعداد واژه‌های قطعی‌نشده — همیشه پیش از متن می‌رسد
+                        self._live_tail = int(arg or 0)
                     elif op == "text":
-                        self.overlay.update_text(arg)
+                        self.overlay.update_text(arg, self._live_tail)
                     elif op == "settings":
                         self._open_settings_ui()
                     elif op == "cstate":

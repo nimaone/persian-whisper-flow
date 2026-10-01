@@ -214,5 +214,36 @@ class TestCompoundOnly(unittest.TestCase):
         )
 
 
+class TestSeparateNumbers(unittest.TestCase):
+    """«و» بین دو عدد مستقل نباید جمع شود.
+
+    رگرسیون واقعی: «چهار و پنج» با جمع‌شدن به «۹» تبدیل می‌شد (۴+۵) — همان
+    جایی که کاربر «مورد چهار و پنج» می‌نوشت و «مورد ۹» درمی‌آمد.
+    """
+
+    def test_two_units_not_summed(self):
+        self.assertEqual(
+            normalize_text("مورد چهار و پنج را انجام بده", min_tokens=2),
+            "مورد چهار و پنج را انجام بده",
+        )
+        self.assertEqual(normalize_text("یک و دو", min_tokens=2), "یک و دو")
+
+    def test_units_become_separate_numbers(self):
+        self.assertEqual(normalize_text("چهار و پنج"), "۴ و ۵")
+        self.assertEqual(normalize_text("سه و شش و نه"), "۳ و ۶ و ۹")
+
+    def test_bigger_to_smaller_still_one_number(self):
+        # «و» وقتی جزء کوچک‌تر می‌آید، یک عدد می‌سازد: «صد و بیست» = ۱۲۰
+        self.assertEqual(convert("صد و پنج"), 105)
+        self.assertEqual(convert("هزار و دویست"), 1200)
+        self.assertEqual(convert("نه هزار و نهصد و نود و نه"), 9999)
+
+    def test_equal_scale_not_merged(self):
+        self.assertEqual(
+            normalize_text("دو هزار و سه هزار", min_tokens=2),
+            "۲٬۰۰۰ و ۳٬۰۰۰",
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

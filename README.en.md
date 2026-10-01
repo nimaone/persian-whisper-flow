@@ -12,6 +12,12 @@ Farsi (Persian) speech-to-text dictation, fully offline and local — triggered 
 
 > 💚 **Special thanks to [Reza2kn](https://github.com/Reza2kn)**, creator of the [Shenava Koochik v1.0](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0) model that powers this app. This project simply would not exist without their open, high-quality model. If you find this app useful, please also star the model and the [Shenava-1 project](https://github.com/Reza2kn/shenava-1).
 
+<a href="docs/demo.mp4"><img src="docs/demo-poster.jpg" width="640" alt="DikteYar video demo"></a>
+
+🎬 **[30-second video demo (with audio)](docs/demo.mp4)** — dictating into Notepad: the live overlay next to the cursor, the spoken «newline» command, and «بیست و سه» (twenty-three) turned into ۲۳ on insert. (Poster: [docs/demo-poster.jpg](docs/demo-poster.jpg))
+
+🎬 **[80-second agent-driven demo (with audio)](docs/demo-agent.mp4)** — a settings tour, a fix request dictated straight into ZCode, and the agent carrying it out: the Save/Cancel/Reset buttons become equal-width and align with the cards above. (Poster: [docs/demo-agent-poster.jpg](docs/demo-agent-poster.jpg))
+
 - **Model**: Shenava-Koochik v1.0 (FastConformer NeMo CTC, 114M parameters) via sherpa-onnx
 - **Language**: Python 3.12 — CustomTkinter UI (no heavyweight GUI dependencies)
 - **Platform**: Windows 10/11 **64-bit (x64)** — **this app is Windows-only** and does not run on Windows ARM (core modules are cross-platform, but the UI, text insertion and installer are built for Windows x64)
