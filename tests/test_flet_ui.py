@@ -738,7 +738,7 @@ class TestHotkeyCapture(SettingsTestBase):
         self._raw("left alt")
         self._raw("k")
         self.assertEqual(w.var_hotkey.value, "ctrl+alt+k")
-        self.assertEqual(w.hk_hint.color, "#9b9b9b")   # FG_DIM — بدون خطا
+        self.assertEqual(w.hk_hint.content.color, "#9b9b9b")   # FG_DIM — بدون خطا
         self._raw("left alt", "up")
         self._raw("left ctrl", "up")
         self.assertEqual(w._hk_mods, set())
@@ -758,14 +758,14 @@ class TestHotkeyCapture(SettingsTestBase):
         self.assertEqual(w.var_hotkey.value, "f9")
         self._raw("esc")
         self.assertEqual(w.var_hotkey.value, DEFAULTS["hotkey"])
-        self.assertEqual(w.hk_hint.color, "#9b9b9b")
+        self.assertEqual(w.hk_hint.content.color, "#9b9b9b")
 
     def test_plain_key_rejected_with_danger_hint(self):
         w = self.win
         w._hk_focus()
         self._raw("a")   # تک‌کلیدی بدون modifier و بدون F
         self.assertEqual(w.var_hotkey.value, DEFAULTS["hotkey"])
-        self.assertEqual(w.hk_hint.color, "#e5484d")   # DANGER
+        self.assertEqual(w.hk_hint.content.color, "#e5484d")   # DANGER
 
     def test_modifier_only_press_changes_nothing(self):
         w = self.win
@@ -806,7 +806,7 @@ class TestSaveValidation(SettingsTestBase):
         w.var_hotkey.value = "hello"
         asyncio.run(w._save())
         self.assertFalse(self.page.window.destroyed, "پنجره نباید بسته شود")
-        self.assertEqual(w.hk_hint.color, "#e5484d")
+        self.assertEqual(w.hk_hint.content.color, "#e5484d")
         self.assertIsNone(w.result)
 
 

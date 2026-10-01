@@ -168,11 +168,16 @@ class SettingsWindow:
             value=cfg.get("hotkey"), read_only=True,
             on_focus=self._hk_focus, on_blur=self._hk_blur, expand=True,
             bgcolor=t.SURFACE_2, border_color=t.BORDER, border_radius=8,
-            text_style=t.fam("Regular", 14), height=40, rtl=True,
+            text_style=t.fam("Regular", 14), height=46, rtl=True,
         )
-        self.hk_hint = ft.Text(
-            HK_HINT,
-            style=t.fam("Regular", 12), color=t.FG_DIM, text_align=ft.TextAlign.RIGHT,
+        # سرنخ چسبیده به کادر میانبر نباشد — چند پیکسل پایینتر (درخواست کاربر)
+        self.hk_hint = ft.Container(
+            ft.Text(
+                HK_HINT,
+                style=t.fam("Regular", 12), color=t.FG_DIM,
+                text_align=ft.TextAlign.RIGHT,
+            ),
+            padding=ft.Padding(left=0, top=6, right=0, bottom=0),
         )
 
         c_hotkey = t.card("کلید میانبر شروع/توقف ضبط", self.var_hotkey, self.hk_hint)
@@ -221,8 +226,9 @@ class SettingsWindow:
     # کتابخانه‌ای که اپ برای ثبت هات‌کی به‌کار می‌برد، پس نام کلیدها
     # (وابسته به لی‌اوت) با ثبت نهایی سازگار است.
     def _set_hk_hint(self, text: str, color: str):
-        self.hk_hint.value = text
-        self.hk_hint.color = color
+        txt = self.hk_hint.content          # Container دور سرنخ — متن داخلی
+        txt.value = text
+        txt.color = color
         self._schedule_update()
 
     def _schedule_update(self):
@@ -847,10 +853,12 @@ class SettingsWindow:
                 on_click=lambda ev, wd=word: self._enroll_remove(wd),
             )
             rows.append(ft.Row([
-                del_btn, edit_btn,
+                # قرینه‌ی CTk: متن لبه‌ی راست، دکمهها لبه‌ی چپ — ردیف RTL است
+                # (اولین فرزند راستترین) پس متن اول و دکمهها در انتهای ردیف
                 ft.Text(f"«{word}» — {n_var} واریانت تأییدشده",
                         style=t.fam("Regular", 13), color=t.FG,
                         text_align=ft.TextAlign.RIGHT, expand=True),
+                edit_btn, del_btn,
             ]))
         self.enroll_list.controls = rows
         self._safe_update(self.enroll_list)
@@ -1397,6 +1405,8 @@ class SettingsWindow:
         if err is not None:
             where, msg = err
             lbl = self.hk_hint if where == "hotkey" else self.hw_hint
+            if where == "hotkey":
+                lbl = lbl.content   # Container دور سرنخ میانبر — متن داخلی
             lbl.value = msg
             lbl.color = t.DANGER
             self._safe_update(lbl)
