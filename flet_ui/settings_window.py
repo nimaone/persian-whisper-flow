@@ -98,6 +98,10 @@ class SettingsWindow:
             label_text_style=t.fam("bold", 13),
             indicator_color=t.ACCENT,
             divider_color=t.BORDER,
+            # عرض طبیعی هر تب (به‌جای پخش تمام‌عرض) + وسط‌چین —
+            # قرینه‌ی هدر جمع‌شده‌ی وسط CTkTabview
+            scrollable=True,
+            tab_alignment=ft.TabAlignment.CENTER,
         )
         self.tabs = ft.Tabs(
             length=len(tab_names),
