@@ -90,18 +90,18 @@ class SettingsWindow:
         # مثل CTk: ذخیره راست، بعد انصراف، بازنشانی چپ) ----------
         btn_bar = ft.Row(
             [
-                ft.ElevatedButton(
+                ft.Button(
                     content="ذخیره", on_click=self._save, width=130, height=40,
                     bgcolor=t.ACCENT, color=t.ON_ACCENT,
                     style=t.btn_style(weight="bold"),
                 ),
-                ft.ElevatedButton(
+                ft.Button(
                     content="انصراف", on_click=self._close, width=110, height=40,
                     bgcolor=t.SURFACE_2, color=t.FG,
                     style=t.btn_style(),
                 ),
                 ft.Container(expand=True),
-                ft.ElevatedButton(
+                ft.Button(
                     content="بازنشانی", on_click=self._reset, width=100, height=40,
                     bgcolor=t.SURFACE_2, color=t.FG,
                     style=t.btn_style(),
@@ -305,7 +305,7 @@ class SettingsWindow:
                                            bottom=4))
         self.spec_stack = ft.Stack(self._bars, width=435, height=28)
         self.verdict = ft.Text("", style=t.fam("bold", 13), text_align=ft.TextAlign.RIGHT)
-        self.test_btn = ft.ElevatedButton(
+        self.test_btn = ft.Button(
             content="شروع تست", on_click=self._toggle_test, width=120, height=34,
             bgcolor=t.SURFACE_2, color=t.FG,
             style=t.btn_style(weight="bold"),

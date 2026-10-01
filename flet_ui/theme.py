@@ -118,10 +118,10 @@ def btn_style(radius: int = 8, size: int = 13, weight: str = "Regular",
 
 
 def secondary_button(text: str, on_click=None, height: int = 36, width: int | None = None,
-                     bold: bool = False) -> ft.ElevatedButton:
+                     bold: bool = False) -> ft.Button:
     """دکمه‌ی ثانویه — قرینه‌ی دکمه‌های SURFACE_2/SURFACE_3."""
-    return ft.ElevatedButton(
-        text=text,
+    return ft.Button(
+        content=text,
         on_click=on_click,
         height=height,
         width=width,

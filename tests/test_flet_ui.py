@@ -81,7 +81,7 @@ def _find_all(root, cls):
 
 
 def _btn_texts(root):
-    return [b.content for b in _find_all(root, ft.ElevatedButton)
+    return [b.content for b in _find_all(root, ft.Button)
             if isinstance(b.content, str)]
 
 

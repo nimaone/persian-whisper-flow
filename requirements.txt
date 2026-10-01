@@ -6,6 +6,8 @@ pyperclip>=1.9
 pystray>=0.19
 Pillow>=10.0
 customtkinter>=5.2
+# UI جدید فلت (flet_ui/) — مهاجرت به 1.0 انجام شده؛ تا تغییر شکننده‌ی بعدی <2 بماند
+flet>=1.0,<2
 # فقط برای حالت اختیاری «واژه‌های حساس» (app/hotword_asr.py)
 # pyctcdecode فعلاً numpy<2.0 می‌خواهد — تا رفع آن numpy را بالاتر نبرید
 pyctcdecode>=0.5

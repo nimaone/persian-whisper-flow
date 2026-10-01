@@ -39,12 +39,12 @@ class ControlWindow:
         )
 
         # ---------- دکمه اصلی ضبط (تمام‌عرض مثل fill="x" در CTk) ----------
-        self.rec_btn = ft.ElevatedButton(
+        self.rec_btn = ft.Button(
             content="شروع ضبط", disabled=True, on_click=self._fire_toggle, height=44,
             bgcolor=t.SURFACE_2, color=t.FG_DIM,
             style=t.btn_style(radius=10, size=12, weight="bold", hpad=0),
         )
-        st_btn = ft.ElevatedButton(
+        st_btn = ft.Button(
             content="تنظیمات", on_click=self._fire_settings, height=36,
             bgcolor=t.SURFACE_2, color=t.FG,
             style=t.btn_style(radius=8, size=12, weight="bold", hpad=0),
