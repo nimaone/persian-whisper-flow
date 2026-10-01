@@ -1068,37 +1068,38 @@ def open_settings(parent_root, app=None):
     # destroy بدون close (خطای نیمه‌راه در ساخت/کد خارجی) هم پوشش داده می‌شود
     win.bind("<Destroy>", _on_destroy)
 
-    # سه دکمه هم‌عرض — بعد از چیدمان، ردیف با لبه‌ی کارت‌های تب تراز
-    # می‌شود: «ذخیره» از سمت شروع (راست) و «بازنشانی» تا انتهای ردیف (چپ).
+    # سه دکمهی همعرض ۱۱۰ — مثل نسخهی فلت؛ ردیف بعد از چیدمان با لبه‌ی
+    # کارت‌های تب تراز می‌شود: «ذخیره» از سمت شروع (راست) و «بازنشانی»
+    # تا انتهای ردیف (چپ).
     btn_reset = ctk.CTkButton(btn_bar, text="بازنشانی", font=(fam, 13), height=40,
-                              width=100, corner_radius=8, fg_color=theme.SURFACE_2,
+                              width=110, corner_radius=8, fg_color=theme.SURFACE_2,
                               hover_color=theme.SURFACE_3, text_color=theme.FG,
                               command=reset)
     btn_reset.pack(side="left")
     btn_save = ctk.CTkButton(btn_bar, text="ذخیره", font=(fam, 13, "bold"), height=40,
-                             width=100, corner_radius=8, fg_color=theme.ACCENT,
+                             width=110, corner_radius=8, fg_color=theme.ACCENT,
                              hover_color=theme.ACCENT_HOVER, text_color=theme.ON_ACCENT,
                              command=save)
     btn_save.pack(side="right", padx=(8, 0))
     btn_close = ctk.CTkButton(btn_bar, text="انصراف", font=(fam, 13), height=40,
-                              width=100, corner_radius=8, fg_color=theme.SURFACE_2,
+                              width=110, corner_radius=8, fg_color=theme.SURFACE_2,
                               hover_color=theme.SURFACE_3, text_color=theme.FG,
                               command=close)
     btn_close.pack(side="right")
 
     def _align_btn_bar():
-        """هم‌عرض‌کردن سه دکمه و تراز لبه‌ی ردیف با کارت‌های تب —
-        بعد از اینکه چیدمان واقعی پنجره نشست."""
+        """تراز لبه‌ی ردیف دکمه‌ها با کارت‌های تب —
+        بعد از اینکه چیدمان واقعی پنجره نشست.
+
+        عرض دکمه‌ها دیگر اینجا بازنویسی نمیشود: قبلاً هر سه به یکسوم عرض
+        پنجره (~۱۶۰px) بزرگ میشدند که با ۱۱۰ ثابتِ نسخهی فلت تفاوت داشت.
+        """
         try:
             inset = (tabview.tab("عمومی").winfo_rootx()
                      - win.winfo_rootx()) + 2  # +2: padx کارت داخل تب
             if inset <= 0:
                 return
             btn_bar.configure(padx=inset)
-            inner_w = win.winfo_width() - 2 * inset
-            bw = max(80, (inner_w - 16) // 3)
-            for b in (btn_reset, btn_close, btn_save):
-                b.configure(width=bw)
         except Exception:
             pass
 
