@@ -12,9 +12,13 @@
 
 > 💚 **با سپاس فراوان از [Reza2kn](https://github.com/Reza2kn)** سازنده‌ی مدل [شنوا کوچیک (Shenava Koochik v1.0)](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0) که قلب این اپ است. این پروژه بدون مدل متن‌باز و باکیفیت ایشان وجود نداشت. اگر این اپ برایتان مفید بود، لطفاً مدل و [پروژه Shenava-1](https://github.com/Reza2kn/shenava-1) ایشان را هم ستاره کنید.
 
+<a href="docs/demo.mp4"><img src="docs/demo-poster.jpg" width="640" alt="دموی ویدیویی دیکته‌یار"></a>
+
 🎬 **دموی ویدیویی ۳۰ ثانیه‌ای (با صدا)** — دیکته در نوت‌پد: پنجره‌ی زنده کنار موس، فرمان صوتی «خط جدید»، و تبدیل «بیست و سه» به ۲۳ هنگام درج. (فایل: [docs/demo.mp4](docs/demo.mp4) — پوستر: [docs/demo-poster.jpg](docs/demo-poster.jpg))
 
 https://github.com/user-attachments/assets/b8c6a8cd-9f77-40a1-adb9-305340b48e58
+
+<a href="docs/demo-agent.mp4"><img src="docs/demo-agent-poster.jpg" width="640" alt="دموی ایجنت‌محور دیکته‌یار"></a>
 
 🎬 **دموی ایجنت‌محور ۸۰ ثانیه‌ای (با صدا)** — تور تنظیمات، دیکته‌ی یک درخواست اصلاحی داخل ZCode و اجرای آن توسط ایجنت: دکمه‌های ذخیره/انصراف/بازنشانی هم‌عرض می‌شوند و لبه‌هایشان با کارت‌های تب تراز می‌شود. (فایل: [docs/demo-agent.mp4](docs/demo-agent.mp4) — پوستر: [docs/demo-agent-poster.jpg](docs/demo-agent-poster.jpg))
 
