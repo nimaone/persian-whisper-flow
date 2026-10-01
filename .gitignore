@@ -29,3 +29,8 @@ build/
 dist/
 *.spec
 installer/Output/
+
+# خروجی‌های محلی دمو و اجرا + صدای آزمایش‌ها
+output/
+sample/
+spikes/speech_rate/
