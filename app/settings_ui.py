@@ -144,6 +144,23 @@ def open_settings(parent_root, app=None):
                         progress_color=theme.ACCENT,  # ریل روشن = سبز
                         button_color=theme.FG, button_hover_color="#ffffff",
                         border_width=0)  # دایره هم‌اندازه‌ی ریل
+
+    def switch_row(parent, text, variable, pady=(0, 0), command=None):
+        """ردیف سوییچ: متن راست، کلید آن/آف در لبه‌ی چپ کارت — همه‌ی
+        سوییچ‌ها همتراز (قرینه‌ی t.switch در نسخه‌ی فلت).
+
+        خروجی: (سوییچ، برچسب) — برچسب برای خاکستری‌شدنِ همزمان با
+        غیرفعال‌شدن سوییچ (مثل «اصلاح واژه‌های ثبت‌شده» در حالت پایدار).
+        """
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", pady=pady)
+        lbl = ctk.CTkLabel(row, text=text, font=(fam, 13),
+                           text_color=theme.FG, anchor="e")
+        lbl.pack(side="right", fill="x", expand=True)
+        sw = ctk.CTkSwitch(row, text="", variable=variable, command=command,
+                           **switch_style)
+        sw.pack(side="left")
+        return sw, lbl
     radio_style = dict(font=(fam, 13), text_color=theme.FG,
                        fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER,
                        border_color=theme.SURFACE_3)
@@ -214,8 +231,7 @@ def open_settings(parent_root, app=None):
     # --- کارت پنجره زنده و سیستم ---
     cv = card(t_general, "پنجره زنده و سیستم")
     var_overlay = tk.BooleanVar(value=bool(cfg.get("overlay_enabled")))
-    ctk.CTkSwitch(cv, text="نمایش پنجره زنده هنگام ضبط",
-                  variable=var_overlay, **switch_style).pack(anchor="e", pady=(0, 4))
+    switch_row(cv, "نمایش پنجره زنده هنگام ضبط", var_overlay, pady=(0, 4))
 
     frow = ctk.CTkFrame(cv, fg_color="transparent")
     frow.pack(fill="x", pady=(2, 0))
@@ -238,8 +254,7 @@ def open_settings(parent_root, app=None):
     sample.pack(fill="x", pady=(6, 0))
 
     var_autostart = tk.BooleanVar(value=bool(cfg.get("autostart")))
-    ctk.CTkSwitch(cv, text="اجرای خودکار با ورود به ویندوز",
-                  variable=var_autostart, **switch_style).pack(anchor="e", pady=(10, 0))
+    switch_row(cv, "اجرای خودکار با ورود به ویندوز", var_autostart, pady=(10, 0))
 
     # ================= تب میکروفون =================
     t_mic = tabview.tab("میکروفون")
@@ -433,8 +448,7 @@ def open_settings(parent_root, app=None):
     dim(cr, "اگر بعد از صحبت، N ثانیه سکوت کنی ضبط خودکار تمام و متن درج می‌شود")
 
     var_sound = tk.BooleanVar(value=bool(cfg.get("sound_feedback")))
-    ctk.CTkSwitch(cr, text="بوق کوتاه هنگام شروع و پایان ضبط",
-                  variable=var_sound, **switch_style).pack(anchor="e", pady=(6, 0))
+    switch_row(cr, "بوق کوتاه هنگام شروع و پایان ضبط", var_sound, pady=(6, 0))
 
     def poll_spec():
         if not var_testing["on"]:
@@ -524,16 +538,14 @@ def open_settings(parent_root, app=None):
 
     cv2 = card(t_insert, "کلیپ‌بورد و فرمان‌ها")
     var_restore = tk.BooleanVar(value=bool(cfg.get("restore_clipboard")))
-    ctk.CTkSwitch(cv2, text="بازیابی محتوای قبلی کلیپ‌بورد بعد از درج",
-                  variable=var_restore, **switch_style).pack(anchor="e", pady=(0, 2))
+    switch_row(cv2, "بازیابی محتوای قبلی کلیپ‌بورد بعد از درج",
+               var_restore, pady=(0, 2))
     dim(cv2, "اگر غیرفعال شود، متن دیکته در کلیپ‌بورد می‌ماند")
     var_commands = tk.BooleanVar(value=bool(cfg.get("voice_commands")))
-    ctk.CTkSwitch(cv2, text="فرمان‌های صوتی", variable=var_commands,
-                  **switch_style).pack(anchor="e", pady=(8, 0))
+    switch_row(cv2, "فرمان‌های صوتی", var_commands, pady=(8, 0))
     dim(cv2, "نقطه، ویرگول، علامت سوال، گیومه باز/بسته، نقطه ویرگول، خط جدید، حذف آخرین کلمه")
     var_itn = tk.BooleanVar(value=bool(cfg.get("persian_itn")))
-    ctk.CTkSwitch(cv2, text="تبدیل اعداد حروفی به رقم", variable=var_itn,
-                  **switch_style).pack(anchor="e", pady=(8, 0))
+    switch_row(cv2, "تبدیل اعداد حروفی به رقم", var_itn, pady=(8, 0))
     dim(cv2, "اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ اعداد تکی مثل «یک» حروفی می‌مانند")
 
     # ================= تب پیشرفته (اسکرول‌شونده — محتوای بلند) =================
@@ -556,9 +568,9 @@ def open_settings(parent_root, app=None):
 
     cs = card(t_adv, "متن زنده پایدار — آزمایشی")
     var_stable_live = tk.BooleanVar(value=bool(cfg.get("stable_live")))
-    ctk.CTkSwitch(cs, text="قفل واژه‌های قطعی (رأی بین‌پنجره‌ای + امتیاز اطمینان)",
-                  variable=var_stable_live, command=lambda: _sync_enroll_ui(),
-                  **switch_style).pack(anchor="e", pady=(0, 6))
+    switch_row(cs, "قفل واژه‌های قطعی (رأی بین‌پنجره‌ای + امتیاز اطمینان)",
+               var_stable_live, pady=(0, 6),
+               command=lambda: _sync_enroll_ui())
     dim(cs, "واژه فقط وقتی قطعی می‌شود که در پنجره‌های پیاپی پایدار باشد، رقیب هم‌زمان نداشته باشد و از لبه خارج نشده باشد؛ نوسان نمایش کمتر می‌شود")
     dim(cs, "نمایش زنده = کل متن قفل‌شده + پنجره‌ی جاری؛ واژه‌های هنوز قطعی‌نشده کم‌رنگ‌تر دیده می‌شوند")
     dim(cs, "متن نهایی از مسیر جداگانه ساخته می‌شود و تحت تأثیر نیست؛ خروجی ممکن است کمی با حالت پیش‌فرض متفاوت باشد")
@@ -567,8 +579,7 @@ def open_settings(parent_root, app=None):
 
     ch_hw = card(t_adv, "واژه‌های حساس (هات‌وورد) — آزمایشی")
     var_hotword = tk.BooleanVar(value=bool(cfg.get("hotword_boost")))
-    ctk.CTkSwitch(ch_hw, text="تقویت واژه‌های مشخص هنگام تشخیص",
-                  variable=var_hotword, **switch_style).pack(anchor="e", pady=(0, 6))
+    switch_row(ch_hw, "تقویت واژه‌های مشخص هنگام تشخیص", var_hotword, pady=(0, 6))
     txt_hotwords = ctk.CTkTextbox(ch_hw, height=110, font=(fam, 13))
     txt_hotwords.pack(fill="x")
     txt_hotwords.insert("1.0", "\n".join(str(w) for w in (cfg.get("hotwords") or [])))
@@ -584,6 +595,8 @@ def open_settings(parent_root, app=None):
         # نمی‌شود (گویش دیکد موتور پایدار با گویش واریانت‌ها فرق دارد)، پس
         # کلید به‌جای روشن‌بودنِ بی‌اثر، غیرفعال نشان داده می‌شود.
         sw_enroll.configure(state="disabled" if stable else "normal")
+        # برچسب متن هم با سوییچ خاکستری شود — سوییچ دیگر متن ندارد
+        lbl_enroll.configure(state="disabled" if stable else "normal")
         add_btn.configure(
             state="normal" if (var_enroll.get() and not stable) else "disabled"
         )
@@ -593,10 +606,9 @@ def open_settings(parent_root, app=None):
             lbl_stable_note.pack_forget()
 
     var_enroll = tk.BooleanVar(value=bool(cfg.get("enroll_alias")))
-    sw_enroll = ctk.CTkSwitch(ce, text="اصلاح واژه‌های ثبت‌شده در خروجی",
-                              variable=var_enroll, command=_sync_enroll_ui,
-                              **switch_style)
-    sw_enroll.pack(anchor="e", pady=(0, 6))
+    sw_enroll, lbl_enroll = switch_row(ce, "اصلاح واژه‌های ثبت‌شده در خروجی",
+                                       var_enroll, pady=(0, 6),
+                                       command=_sync_enroll_ui)
     dim(ce, "واژه‌ای که مدل مدام اشتباه می‌شنود را ضبط کن؛ شکل‌های شنیده‌شده را تیک بزن تا در خروجی به واژه‌ی درست تبدیل شوند")
     dim(ce, "اثر هم روی متن زنده و هم روی متن نهایی دارد؛ در حالت «متن زنده پایدار» اعمال نمی‌شود")
 
