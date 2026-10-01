@@ -669,7 +669,7 @@ class SettingsWindow:
         """خواندن همه‌ی مقادیر از ویجت‌ها — قرینه‌ی save() در CTk."""
         auto_stop_labels = {"خاموش": 0, "۳ ثانیه": 3, "۵ ثانیه": 5, "۱۰ ثانیه": 10}
         hw_on = bool(self.var_hotword.value)
-        return {
+        d = {
             "hotkey": (self.var_hotkey.value or "").strip(),
             "paste_method": self.var_paste.value or "clipboard",
             "voice_commands": bool(self.var_commands.value),
@@ -685,6 +685,14 @@ class SettingsWindow:
             "hotwords": [ln.strip() for ln in (self.txt_hotwords.value or "").splitlines()
                          if len(ln.strip()) >= 2],
         }
+        # کلیدهایی که این UI ویرایش نمی‌کند (rejoin_prefixes، enroll_alias،
+        # stable_live، input_device_key) — از تنظیمات فعلی عبور بدهد و جای
+        # خالی را با DEFAULTS پر کند تا ذخیره، آن‌ها را ریست یا پاک نکند.
+        for k, default in DEFAULTS.items():
+            if k not in d:
+                v = (self.cfg or {}).get(k, default)
+                d[k] = default if v is None else v
+        return d
 
     def _selected_device(self):
         """دستگاه انتخابی در کمبو — None یعنی تشخیص خودکار (قرینه‌ی CTk)."""

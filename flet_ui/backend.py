@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from app import persian_itn, voice_commands
+from app import fa_post, persian_itn, voice_commands
 from app.asr import LiveTranscriber, load_engine
 from app.config import Config, model_dir, set_autostart
 from app.paster import insert_text, send_key
@@ -316,6 +316,8 @@ class DictationApp:
                     text = self.live.partial(buf)
                     if self.cfg.get("persian_itn"):
                         text = persian_itn.normalize_text(text, min_tokens=2)
+                    if self.cfg.get("rejoin_prefixes"):
+                        text = fa_post.rejoin_prefixes(text)
                     self._ov("text", text)
                     # توقف خودکار پس از سکوت — فقط اگر قبلاً صدایی شنیده شده
                     if auto_stop > 0:
@@ -365,6 +367,8 @@ class DictationApp:
     def _insert(self, text: str):
         if self.cfg.get("persian_itn"):
             text = persian_itn.normalize_text(text, min_tokens=2)
+        if self.cfg.get("rejoin_prefixes"):
+            text = fa_post.rejoin_prefixes(text)
         method = self.cfg.get("paste_method")
         restore = bool(self.cfg.get("restore_clipboard"))
         if self.cfg.get("voice_commands"):
