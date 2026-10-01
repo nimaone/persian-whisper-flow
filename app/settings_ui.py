@@ -108,8 +108,19 @@ def open_settings(parent_root, app=None):
         return inner
 
     def dim(parent, text):
-        ctk.CTkLabel(parent, text=text, font=(fam, 12), text_color=theme.FG_DIM,
-                     anchor="e", justify="right").pack(fill="x", pady=(2, 3))
+        """متن راهنمای کم‌رنگ — با wraplength ثابت.
+
+        بدون wraplength، CTkLabel تکخطی میماند: متنهای بلند از لبهی کارت
+        بریده میشدند و پاراگرافها بهصورت خطهای بریدهی ناهماهنگ دیده
+        میشدند (ریشهی «نامرتبی» گزارششده).
+
+        نکته: wraplength عمداً ثابت است، نه bind به <Configure> — حلقهی
+        Configure↔re-wrap آزمایشی، پنجره را در Not Responding برده بود.
+        عرض لیبل راهنما با پنجرهی ۵۶۰ ثابت ≈ ۴۵۶px است؛ ۴۴۰ حاشیهی امن.
+        """
+        return ctk.CTkLabel(parent, text=text, font=(fam, 12),
+                            text_color=theme.FG_DIM, anchor="e", justify="right",
+                            wraplength=440).pack(fill="x", pady=(2, 3))
 
     # === تب‌ها (ترتیب add = چپ به راست؛ «عمومی» باید راست‌ترین باشد) ===
     tabview = ctk.CTkTabview(
