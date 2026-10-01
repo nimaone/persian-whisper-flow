@@ -801,12 +801,8 @@ class SettingsWindow:
             ft.Row([self.enroll_add_btn], alignment=ft.MainAxisAlignment.END),
         )
         self._enroll_list_card = c_enroll
+        self._enroll_dialog = None
         self._rebuild_enroll_list()
-
-        # ادیتور واژه — پنل جدای درون‌صفحه‌ای (فلت دیالوگ Toplevel ندارد)؛
-        # موقع باز شدن، کارت فهرست مخفی می‌شود
-        self._enroll_editor_card = t.card("ثبت واژه جدید", ft.Column(spacing=6))
-        self._enroll_editor_card.visible = False
 
         c_info = t.card(
             "درباره موتور تشخیص",
@@ -817,8 +813,7 @@ class SettingsWindow:
             t.dim("کیفیت روی جملات دیکته‌شده بهتر از مکالمه آزاد است"),
         )
         self._sync_enroll_ui()
-        return ft.Column([c_proc, c_hw, c_stable, c_enroll,
-                          self._enroll_editor_card, c_info],
+        return ft.Column([c_proc, c_hw, c_stable, c_enroll, c_info],
                          spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
 
     # ================= ثبت صوتی واژه (قرینه‌ی open_enroll_dialog در CTk) =================
@@ -868,7 +863,11 @@ class SettingsWindow:
     def _open_enroll_editor(self, word: str | None = None):
         """word=None → ثبت واژه جدید؛ str → ویرایش همان واژه.
 
-        فهرست مخفی و ادیتور نشان داده می‌شود — با ذخیره/انصراف برمی‌گردد.
+        مدال روی کل پنجره — قرینه‌ی open_enroll_dialog (Toplevel + grab_set)
+        در CTk. هر بار AlertDialog تازه ساخته و با show_dialog بالا میآید؛
+        نسخه‌ی کارت درون‌صفحه‌ای اینجا باگ داشت: بستنش فقط enroll_list
+        را آپدیت میکرد و visibleِ کارت‌ها هرگز به کلاینت نمی‌رسید —
+        «ذخیره/انصراف یکبار در میان کار میکرد».
         """
         entry = None
         if word is not None:
@@ -912,7 +911,12 @@ class SettingsWindow:
                        for i in range(3)]
         slot_rows = [ft.Row([st, pb, rb])
                      for st, pb, rb in zip(self.en_status, self.en_play, self.en_rec)]
+        self.en_save_hint = ft.Text(
+            "اول واژه‌ی درست را بنویس (حداقل ۲ حرف)",
+            style=t.fam("Regular", 12), color=t.DANGER,
+            text_align=ft.TextAlign.RIGHT, visible=False)
 
+        # RTL: اولین فرزند راست‌ترین — قرینه‌ی CTk: ذخیره راست، انصراف چپ
         btn_save = ft.Button(content="ذخیره واژه", width=130, height=36,
                              bgcolor=t.ACCENT, color=t.ON_ACCENT,
                              style=t.btn_style(weight="bold"),
@@ -921,38 +925,70 @@ class SettingsWindow:
                                bgcolor=t.SURFACE_2, color=t.FG,
                                style=t.btn_style(),
                                on_click=lambda ev: self._close_enroll_editor())
-        editor_body = self._enroll_editor_card.content
-        editor_body.controls = [
-            ft.Text("واژه‌ی درست — همان‌طور که باید نوشته شود:",
-                    style=t.fam("Regular", 13), color=t.FG,
-                    text_align=ft.TextAlign.RIGHT),
-            self.en_word,
-            ft.Text("سه بار واضح بگو — ضبط را شروع کن، بگو، و قطع کن؛ بعد با پخش گوش بده:",
-                    style=t.fam("Regular", 13), color=t.FG,
-                    text_align=ft.TextAlign.RIGHT),
-            ft.Column(slot_rows, spacing=2),
-            self.en_checks,
-            ft.Row([
-                self.en_manual,
-                ft.Button(content="+ افزودن دستی", width=110, height=30,
-                          bgcolor=t.SURFACE_2, color=t.FG, style=t.btn_style(size=11),
-                          on_click=lambda ev: self._enroll_add_manual()),
-            ], spacing=6),
-            ft.Row([btn_cancel, ft.Container(expand=True), btn_save]),
-        ]
+        dlg = ft.AlertDialog(
+            modal=True,
+            rtl=True,  # AlertDialog از rtl صفحه ارث نمیبرد — صریح ست میشود
+            title=ft.Text("ویرایش واژه" if entry else "ثبت واژه جدید",
+                          style=t.fam("bold", 15), color=t.FG,
+                          text_align=ft.TextAlign.RIGHT),
+            bgcolor=t.SURFACE,
+            content=ft.Container(
+                ft.Column([
+                    ft.Text("واژه‌ی درست — همان‌طور که باید نوشته شود:",
+                            style=t.fam("Regular", 13), color=t.FG,
+                            text_align=ft.TextAlign.RIGHT),
+                    self.en_word,
+                    ft.Text("سه بار واضح بگو — ضبط را شروع کن، بگو، و قطع کن؛ بعد با پخش گوش بده:",
+                            style=t.fam("Regular", 13), color=t.FG,
+                            text_align=ft.TextAlign.RIGHT),
+                    ft.Column(slot_rows, spacing=2),
+                    self.en_checks,
+                    ft.Row([
+                        self.en_manual,
+                        ft.Button(content="+ افزودن دستی", width=110, height=30,
+                                  bgcolor=t.SURFACE_2, color=t.FG, style=t.btn_style(size=11),
+                                  on_click=lambda ev: self._enroll_add_manual()),
+                    ], spacing=6),
+                    self.en_save_hint,
+                    ft.Row([btn_save, ft.Container(expand=True), btn_cancel]),
+                ], spacing=6),
+                width=440,
+            ),
+            on_dismiss=lambda ev: self._close_enroll_editor(),
+        )
+        self._enroll_dialog = dlg
         self._rebuild_enroll_checks()
-        # کارت فهرست ← مخفی؛ ادیتور ← نمایان
-        self._enroll_list_card.visible = False
-        self._enroll_editor_card.visible = True
-        self._safe_update(self._enroll_editor_card)
+        self._show_dialog(dlg)
         self._start_enroll_poll()
 
-    def _close_enroll_editor(self):
+    def _show_dialog(self, dlg):
+        """بالا آوردن مدال — روی Page واقعی با show_dialog؛ در تست‌ها
+        (MockPage بدون show_dialog) فقط حالت پایتون ست می‌شود."""
+        show = getattr(self.page, "show_dialog", None)
+        if show is None:
+            dlg.open = True
+            self._safe_update(dlg)
+            return
+        # اگر مدالی به هر دلیلی از قبل باز مانده، پایینش میآوریم —
+        # وگرنه show_dialog با «Dialog is already opened» خطا میدهد
+        try:
+            getattr(self.page, "pop_dialog", lambda: None)()
+        except Exception:
+            pass
+        show(dlg)
+
+    def _close_enroll_editor(self, e=None):
+        """بستن مدال — از انصراف/ذخیره/on_dismiss؛ idempotent است چون
+        on_dismiss بعد از pop برنامه‌ای هم دوباره میآید."""
+        if not getattr(self, "_enroll_editing", False):
+            return
         self._enroll_editing = False
         self._enroll_stop_recording_quiet()
-        self._enroll_editor_card.visible = False
-        if getattr(self, "_enroll_list_card", None) is not None:
-            self._enroll_list_card.visible = True
+        self._enroll_dialog = None
+        try:
+            getattr(self.page, "pop_dialog", lambda: None)()
+        except Exception:
+            pass
         self._rebuild_enroll_list()
         self._safe_update(self.enroll_list)
 
@@ -1192,6 +1228,10 @@ class SettingsWindow:
     def _enroll_save(self, e=None):
         word = (self.en_word.value or "").strip()
         if len(word) < 2:
+            # CTk بیصدا برمیگردد؛ اینجا نشان میدهیم وگرنه «دکمه کار نکرد»
+            # به نظر میرسد (بخشی از گزارش باگ دکمهها)
+            self.en_save_hint.visible = True
+            self._safe_update(self.en_save_hint)
             return
         checked = [v for v, ok in self._enroll_checks.items() if ok]
         from app import enroll as enroll_mod

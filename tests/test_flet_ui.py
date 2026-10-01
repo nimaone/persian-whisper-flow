@@ -423,27 +423,69 @@ class TestSettingsWindow(SettingsTestBase):
         return cm, _enroll_mod, fake
 
     def test_enroll_editor_open_add_manual_save(self):
-        # ادیتور درون‌صفحه‌ای: باز شدن فهرست را مخفی می‌کند؛ واریانت دستی
-        # به فهرست تأییدها می‌آید؛ ذخیره، مدخل را روی دیسک می‌نویسد و برمی‌گردد
+        # ادیتور مدال (AlertDialog): باز شدن مدال تازه میسازد؛ واریانت دستی
+        # به فهرست تأییدها میآید؛ ذخیره، مدخل را روی دیسک مینویسد و میبندد
         cm, enroll_mod, fake = self._isolated_enroll_store()
         with cm:
             self.win._enroll_store = enroll_mod.EnrollStore.load()
             self.win._open_enroll_editor()
-            self.assertTrue(self.win._enroll_editor_card.visible)
-            self.assertFalse(self.win._enroll_list_card.visible)
             self.assertTrue(self.win._enroll_editing)
+            self.assertIsNotNone(self.win._enroll_dialog)
+            self.assertTrue(self.win._enroll_dialog.open)   # MockPage: فقط حالت پایتون
             self.win.en_word.value = "دیکته‌یار"
             self.win.en_manual.value = "ویسپر فارسی"
             self.win._enroll_add_manual()
             self.assertIn("ویسپر فارسی", self.win._enroll_heard)
             self.assertTrue(self.win._enroll_checks["ویسپر فارسی"])
             self.win._enroll_save()
-            self.assertFalse(self.win._enroll_editor_card.visible)
-            self.assertTrue(self.win._enroll_list_card.visible)
             self.assertFalse(self.win._enroll_editing)
+            self.assertIsNone(self.win._enroll_dialog)
             saved = enroll_mod.EnrollStore.load()
             self.assertEqual([e["word"] for e in saved.entries], ["دیکته‌یار"])
             self.assertIn("ویسپر فارسی", saved.entries[0]["variants"])
+            fake.unlink(missing_ok=True)
+
+    def test_enroll_editor_reopen_cycle(self):
+        # رگرسیون «ذخیره/انصراف یکبار در میان کار میکرد»: هر باز/بسته باید
+        # حالت پایتون را کامل جابهجا کند — مدال تازه، بدون ماندهی وضعیت
+        cm, enroll_mod, fake = self._isolated_enroll_store()
+        with cm:
+            self.win._enroll_store = enroll_mod.EnrollStore.load()
+            for round_no in range(3):
+                self.win._open_enroll_editor()
+                self.assertTrue(self.win._enroll_editing, round_no)
+                self.assertIsNotNone(self.win._enroll_dialog, round_no)
+                self.assertTrue(self.win._enroll_dialog.open, round_no)
+                # انصراف — سپس فراخوانی دوباره (on_dismiss بعد از pop میآید)
+                self.win._close_enroll_editor()
+                self.win._close_enroll_editor()   # idempotent
+                self.assertFalse(self.win._enroll_editing, round_no)
+                self.assertIsNone(self.win._enroll_dialog, round_no)
+                # ذخیره هم باید مدال را ببندد
+                self.win._open_enroll_editor()
+                self.win.en_word.value = f"واژه {round_no}"
+                self.win._enroll_save()
+                self.assertIsNone(self.win._enroll_dialog, round_no)
+            saved = enroll_mod.EnrollStore.load()
+            words = [e["word"] for e in saved.entries]
+            self.assertEqual(words, ["واژه 0", "واژه 1", "واژه 2"])
+            fake.unlink(missing_ok=True)
+
+    def test_enroll_save_empty_word_shows_hint(self):
+        # واژهی کوتاه → ذخیره بیاثر میماند ولی سرنخ قرمز میدهد —
+        # CTk بیصدا برمیگشت و «دکمه کار نکرد» به نظر میآمد
+        cm, enroll_mod, fake = self._isolated_enroll_store()
+        with cm:
+            self.win._enroll_store = enroll_mod.EnrollStore.load()
+            self.win._open_enroll_editor()
+            self.win.en_word.value = "ا"
+            self.win._enroll_save()
+            self.assertTrue(self.win.en_save_hint.visible)
+            self.assertTrue(self.win._enroll_editing)      # مدال باز مانده
+            self.assertFalse(enroll_mod.EnrollStore.load().entries)
+            self.win.en_word.value = "دو حرف"
+            self.win._enroll_save()
+            self.assertFalse(self.win._enroll_editing)
             fake.unlink(missing_ok=True)
 
     def test_enroll_ui_disabled_in_stable_mode(self):
