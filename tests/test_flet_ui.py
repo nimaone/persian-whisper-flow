@@ -469,23 +469,29 @@ class TestSettingsWindow(SettingsTestBase):
 
     def test_wave_strip_is_full_width_deep_bar(self):
         # رگرسیون: Stack میلهها شناور روی کارت بود — مثل کانوس CTk باید
-        # نوار تمامعرض DEEP باشد که میلهها از لبهی راستش رسم میشوند
+        # نوار تمامعرض DEEP باشد که میلهها کل عرضش را پر میکنند
         wave = self.win.spec_wave
         self.assertEqual(wave.bgcolor, "#181818")            # DEEP
         self.assertTrue(wave.expand, "نوار موج باید تمامعرض کارت شود")
-        self.assertIs(wave.content, self.win.spec_stack)
-        self.assertEqual(self.win.spec_stack.width, 435)
-        self.assertEqual(wave.alignment, ft.Alignment(1.0, 0.0),
-                         "میلهها در لبهی راست — جدیدترین سمت راست مثل CTk")
+        self.assertIs(wave.content, self.win.spec_bars)
+        self.assertEqual(wave.height, 28)
+        self.assertEqual(wave.padding.bottom, 4, "خط کفی SPECS_H+4 مثل CTk")
 
-    def test_spectrum_bars_are_in_stack_with_fixed_left(self):
-        # باگ رگرسیون: میله‌ها در Row با layout-END بودند و تغییر height کل
-        # TabBarView را باز-layout می‌کرد → انیمیشن بی‌حرکت. الان Stack با
-        # left ثابت است.
-        self.assertIsInstance(self.win.spec_stack, ft.Stack)
+    def test_spectrum_bars_fill_strip_width(self):
+        # رگرسیون: میلهها با گام ثابت ۹px به راست چسبیده بودند و در
+        # پنجرهی عریض ابتدای نوار خالی میماند. حالا هر میله expand دارد
+        # و کل عرض نوار را پر میکند؛ vertical_alignment=END کف مشترک
+        # میسازد (رشد از پایین مثل CTk).
+        self.assertIsInstance(self.win.spec_bars, ft.Row)
         self.assertEqual(len(self.win._bars), 48)
+        self.assertEqual(self.win.spec_bars.spacing, 3)
+        self.assertEqual(self.win.spec_bars.vertical_alignment,
+                         ft.CrossAxisAlignment.END)
         for i, bar in enumerate(self.win._bars):
-            self.assertEqual(bar.left, (47 - i) * 9, f"bar {i}")
+            self.assertTrue(bar.expand, f"bar {i} باید expand باشد")
+            self.assertIsNone(bar.left, "میله دیگر Positioned نیست")
+        # ارتفاع ثابتِ نوار: تغییر height میله نباید Row را جابهجا کند
+        self.assertEqual(self.win.spec_wave.height, 28)
 
     def test_animation_moves_bar_heights(self):
         # باگ رگرسیون: تست صدا باید از RMS واقعی میکروفون مواج بسازد.

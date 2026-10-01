@@ -362,17 +362,19 @@ class SettingsWindow:
         )
 
         # ---------- تست صدا — ضبط واقعی RMS با MicTester (قرینه‌ی CTk) ----------
-        # Stack با میله‌های left ثابت و کفِ ثابت (bottom=4 مثل خط کفی
-        # SPECS_H+4 در CTk): میله از پایین به بالا رشد می‌کند و تغییر
-        # height فقط خودِ میله را رندر می‌کند.
+        # میله‌ها در Row با expand — هر میله سهم برابر از عرض نوار می‌گیرد
+        # و با تغییر اندازه‌ی پنجره هم کل نوار را پر می‌کند (گام ثابت ۹px
+        # در پنجره‌ی عریض، ابتدای نوار خالی می‌گذاشت). Row داخل Containerِ
+        # با ارتفاع ثابت است: تغییر height میله ارتفاع Row را عوض نمیکند و
+        # فقط خود میله رندر میشود — باگ قدیمی باز-layout کل TabBarView
+        # برنمی‌گردد. vertical_alignment=END کف مشترک میسازد: میله از پایین
+        # به بالا رشد میکند (خط کفی SPECS_H+4 در CTk).
         self._bars: list[ft.Container] = []
         for i in range(48):
-            self._bars.append(ft.Container(width=6, height=3,
-                                           bgcolor=t.SURFACE_3,
-                                           border_radius=2,
-                                           left=(47 - i) * 9,
-                                           bottom=4))
-        self.spec_stack = ft.Stack(self._bars, width=435, height=28)
+            self._bars.append(ft.Container(height=3, bgcolor=t.SURFACE_3,
+                                           border_radius=2, expand=True))
+        self.spec_bars = ft.Row(self._bars, spacing=3,
+                                vertical_alignment=ft.CrossAxisAlignment.END)
         self.verdict = ft.Text("", style=t.fam("bold", 13), text_align=ft.TextAlign.RIGHT)
         # نشانگر کیفیت ورودی — نویز پایه/اوج/SNR زنده حین تست
         self.quality_lbl = ft.Text("", style=t.fam("Regular", 12),
@@ -382,14 +384,12 @@ class SettingsWindow:
             bgcolor=t.SURFACE_2, color=t.FG,
             style=t.btn_style(weight="bold"),
         )
-        # ترتیب و چینش مثل CTk: موج → دکمه وسط‌چین → حکم. موج داخل نوار
-        # تمامعرض با پسزمینهی DEEP — قرینهی کانوس fill="x" با bg=DEEP در
-        # CTk: میلهها (۴۳۵px، جدیدترین در راست) در لبهی راست نوار می‌نشینند
-        # و باقی نوار، تیرهی خالی میماند — نه خطچین شناور روی کارت
+        # ترتیب و چینش مثل CTk: موج → دکمه وسط‌چین → حکم. نوار تمامعرض با
+        # پسزمینهی DEEP — قرینهی کانوس fill="x" با bg=DEEP در CTk؛
+        # padding پایین ۴ = خط کفی SPECS_H+4، میلهها روی آن رشد میکنند
         self.spec_wave = ft.Container(
-            self.spec_stack, bgcolor=t.DEEP, height=28, expand=True,
-            padding=ft.Padding(left=8, right=8, top=0, bottom=0),
-            alignment=ft.Alignment(1.0, 0.0),  # راست — جدیدترین میله راست مثل CTk
+            self.spec_bars, bgcolor=t.DEEP, height=28, expand=True,
+            padding=ft.Padding(left=8, right=8, top=0, bottom=4),
         )
         c_test = t.card("تست صدا",
                         self.spec_wave,
@@ -545,8 +545,8 @@ class SettingsWindow:
         حلقه‌ی انیمیشن باید روی ایونت‌لوپ فلت برود — داکیومنت رسمی:
         page.run_task = «Run handler coroutine as a new Task in the event
         loop». آپدیت از تردِ threading.Timer به صف‌ی ارسال کلاینت
-        (asyncio.Queue) نمی‌رسد و هیچ‌وقت رندر نمی‌شود؛ میله‌ها در Stack
-        با left ثابت‌اند و یک update() والد، دیف همه‌ی میله‌ها را می‌فرستد.
+        (asyncio.Queue) نمی‌رسد و هیچ‌وقت رندر نمی‌شود؛ میله‌ها در Rowِ
+        داخل Containerِ هم‌ارتفاع‌اند و یک update() والد، دیف همه‌ی میله‌ها را می‌فرستد.
         """
         self._testing = not getattr(self, "_testing", False)
         self.test_btn.content = "توقف تست" if self._testing else "شروع تست"
@@ -576,7 +576,7 @@ class SettingsWindow:
                 bar.bgcolor = t.SURFACE_3
             self.verdict.value = ""
             self.quality_lbl.value = ""
-            self._safe_update(self.spec_stack)
+            self._safe_update(self.spec_bars)
             self._safe_update(self.verdict)
 
     def _tick_once(self, vals: list, env: list) -> bool:
@@ -648,7 +648,7 @@ class SettingsWindow:
             self.verdict.value = "سیگنالی نمی‌آید — دستگاه دیگری را امتحان کن"
             self.verdict.color = t.DANGER
         # یک update والد = یک پیام برای دیف کل ۴۸ میله + حکم
-        self._safe_update(self.spec_stack)
+        self._safe_update(self.spec_bars)
         self._safe_update(self.verdict)
         if not self._page_alive():
             self._testing = False
