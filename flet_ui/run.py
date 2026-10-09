@@ -19,6 +19,8 @@ import time
 
 import flet as ft
 
+from app import paths
+from app.config import APP_TITLE
 from flet_ui import theme as t
 
 
@@ -29,6 +31,23 @@ def window_event_kind(e) -> str:
     return str(getattr(kind, "value", kind)).lower()
 
 
+def _setup_taskbar_identity() -> None:
+    """هویت تسک‌بار ویندوز برای پنجره‌ی کلاینت فلت (فقط frozen).
+
+    پنجره به flet.exe تعلق دارد؛ بدون این ویژگیها تسکبار و دکمهی pin
+    نام/آیکون flet.exe را نشان میدهند. فلت هنگام باز کردن کلاینت این
+    مقادیر را از env میخواند و روی پنجره مینشاند. در سورس sys.executable
+    مفسر پایتون است — پس فقط وقتی exe خودمان است اعمال میشود.
+    """
+    if not paths.is_frozen():
+        return
+    exe = str(sys.executable)
+    os.environ.setdefault("FLET_APP_USER_MODEL_ID", exe)
+    os.environ.setdefault("FLET_APP_RELAUNCH_COMMAND", f'"{exe}"')
+    os.environ.setdefault("FLET_APP_RELAUNCH_DISPLAY_NAME", APP_TITLE)
+    os.environ.setdefault("FLET_APP_RELAUNCH_ICON", f"{exe},0")
+
+
 async def main(target: str):
     # پنجره اول hidden بالا می‌آید تا اندازه‌ی درست پیش از اولین فریم ست شود —
     # وگرنه کلاینت فلت با اندازه‌ی پیش‌فرض بزرگش دیده می‌شود و بعد کوچک می‌شود
@@ -37,6 +56,9 @@ async def main(target: str):
 
     async def build(page: ft.Page):
         t.install_fonts(page)
+        # آیکون نوار عنوان/تسکبار برای همهی مسیرها (هر پنجره هم خودش
+        # صدا میزند — برای مسیر اول بر-model از قبل ست شود)
+        t.apply_icon(page)
         page.bgcolor = t.BG
         page.theme_mode = ft.ThemeMode.DARK
 
@@ -144,8 +166,10 @@ async def main(target: str):
             if model_ready():
                 _start_dictation()
             else:
-                # بدون مدل، همان صفحه‌ی اولین اجرا جای پنجره‌ی کنترل می‌نشیند
-                FirstRunWindow(page, on_ready=_start_dictation, on_quit=_quit_all)
+                # بدون مدل، همان صفحهی اولین اجرا جای پنجرهی کنترل مینشیند —
+                # کاربر یکی از دو گزینه («دانلود خودکار» / «انتخاب دستی») را میزند
+                FirstRunWindow(page, on_ready=_start_dictation,
+                               on_quit=_quit_all)
 
         # همه‌چیز چیدمان شد — حالا پنجره را نشان بده
         if hidden:
@@ -179,6 +203,7 @@ async def main(target: str):
 
         asyncio.create_task(wait_close())
 
+    _setup_taskbar_identity()
     await ft.run_async(build, view=ft.AppView.FLET_APP_HIDDEN if hidden
                        else ft.AppView.FLET_APP)
 

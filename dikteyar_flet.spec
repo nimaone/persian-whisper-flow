@@ -17,10 +17,17 @@
   آنتی‌ویروس با onefile بد رفتار می‌کنند.
 - کلاینت فلت در اولین اجرا از zip به ~/.flet/client اکسترکت میشود —
   یک بار برای هر کاربر، بدون اینترنت.
-- مدل (model.onnx) عمداً باندل نمیشود — دیالوگ اولین اجرا دانلود میکند.
+- مدل (model.onnx) عمداً باندل نمیشود — صفحهی اولین اجرا دو گزینه میدهد:
+  «دانلود خودکار» یا «انتخاب دستی فایلها».
+- آیکون پنجره/تسکبار: صفحهی اجرا page.window.icon را از assets/logo.ico
+  میکشد و run.py در حالت frozen متغیرهای FLET_APP_* را تنظیم میکند تا
+  تسکبار نام/آیکون همین exe را نشان دهد — کلاینت (flet.exe) دستنخورده میماند.
 - tkinter حذف نمیشود: پنجره متن زنده (app/overlay.py) در هر دو UI
   با Tk کار میکند.
+- customtkinter هم حذف نمیشود: پنجره متن زنده (app/overlay.py) با ctk.CTk ساخته شده و بکاند فلت هر دو UI همان Overlay را صدا میزند — بدون ماژول و فایلهای دادهاش (تم/آیکون/فونت) این پنجره در بسته زنده نمیمانود.
 """
+
+from PyInstaller.utils.hooks import collect_data_files
 
 a = Analysis(
     ["flet_ui\\run.py"],
@@ -29,18 +36,20 @@ a = Analysis(
     datas=[
         ("assets", "assets"),                          # لوگو + فونت وزیرمتن
         ("packaging\\flet-windows.zip", "flet_desktop\\app"),
+        *collect_data_files("customtkinter"),          # تم/آیکون/فونت برای overlay زنده
     ],
     hiddenimports=[
         "pystray._win32",               # بک‌اند ویندوز pystray (import دینامیک)
         "flet_desktop",                 # import دینامیک در flet.app
+        "customtkinter",                # پنجره زنده (app/overlay.py) — import پنهان در فلت
         "onnxruntime",                  # هات‌وورد اختیاری
         "pyctcdecode",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
+    # customtkinter عمداً exclude نمیشود — پنجره زنده (app/overlay.py) با ctk ساخته شده
     excludes=[
-        "customtkinter",                # فقط UI قبلی — در بسته فلت اضافی
         "tkinter.test", "test", "unittest", "pydoc_data",
         "matplotlib", "pandas", "scipy", "IPython", "jedi",
     ],
