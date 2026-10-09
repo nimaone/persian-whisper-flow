@@ -18,9 +18,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import flet as ft
 
+from app import paths
 from app.config import APP_TITLE
 from flet_ui import first_run_window as fr
 from flet_ui.first_run_window import FirstRunWindow, model_ready, TITLE, BODY
+from flet_ui import run as run_mod
 from tests.test_flet_ui import MockPage, _btn_texts, _find_all
 
 
@@ -108,6 +110,17 @@ class FirstRunBuild(unittest.TestCase):
         self.assertEqual(self.quit_calls, [1])
 
     # ---------- دانلود خودکار ----------
+    def test_no_download_starts_without_user_action(self):
+        dl = fake_download()
+        win = self._win(download_fn=dl)
+        time.sleep(0.1)
+        self.assertEqual(dl.calls, [])   # نباید خودکار شروع شود
+        self.assertFalse(win.dl_btn.disabled)
+        self.assertFalse(win.pick_btn.disabled)
+        self.assertFalse(win.result)
+        self.assertEqual(win.status.value, "")
+        self.assertEqual(self.ready, [])
+
     def test_download_success_marks_accent_and_readies(self):
         win = self._win(download_fn=fake_download())
         win._fire_download()
@@ -186,6 +199,48 @@ class FirstRunBuild(unittest.TestCase):
         asyncio.run(win._pick_folder())
         self.assertFalse(win.result)
         self.assertEqual(win.status.value, "")
+
+
+class TaskbarIdentity(unittest.TestCase):
+    """متغیرهای FLET_APP_* — هویت نام/آیکون تسک‌بار برای کلاینت فلت."""
+
+    KEYS = ("FLET_APP_USER_MODEL_ID", "FLET_APP_RELAUNCH_COMMAND",
+            "FLET_APP_RELAUNCH_DISPLAY_NAME", "FLET_APP_RELAUNCH_ICON")
+
+    def setUp(self):
+        self._saved = {k: os.environ.pop(k, None) for k in self.KEYS}
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def test_frozen_sets_env_from_executable(self):
+        with mock.patch.object(paths, "is_frozen", lambda: True), \
+             mock.patch.object(run_mod.sys, "executable",
+                               r"C:\Apps\DikteYarFlet\DikteYarFlet.exe"):
+            run_mod._setup_taskbar_identity()
+        exe = r"C:\Apps\DikteYarFlet\DikteYarFlet.exe"
+        self.assertEqual(os.environ["FLET_APP_USER_MODEL_ID"], exe)
+        self.assertEqual(os.environ["FLET_APP_RELAUNCH_COMMAND"], f'"{exe}"')
+        self.assertEqual(os.environ["FLET_APP_RELAUNCH_DISPLAY_NAME"], APP_TITLE)
+        # بارگذاری آیکون از خود exe — لوگوی جاسازی‌شده در :0
+        self.assertEqual(os.environ["FLET_APP_RELAUNCH_ICON"], f"{exe},0")
+
+    def test_source_mode_is_noop(self):
+        with mock.patch.object(paths, "is_frozen", lambda: False):
+            run_mod._setup_taskbar_identity()
+        for k in self.KEYS:
+            self.assertNotIn(k, os.environ)
+
+    def test_existing_env_is_preserved(self):
+        os.environ["FLET_APP_USER_MODEL_ID"] = "custom"
+        with mock.patch.object(paths, "is_frozen", lambda: True), \
+             mock.patch.object(run_mod.sys, "executable", r"C:\x.exe"):
+            run_mod._setup_taskbar_identity()
+        self.assertEqual(os.environ["FLET_APP_USER_MODEL_ID"], "custom")
 
 
 if __name__ == "__main__":

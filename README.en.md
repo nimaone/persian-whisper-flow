@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/070fce67-3225-4949-b35c-9d734daae93b
 - **Model**: Shenava-Koochik v1.0 (FastConformer NeMo CTC, 114M parameters) via sherpa-onnx
 - **Language**: Python 3.12 — CustomTkinter UI (no heavyweight GUI dependencies)
 - **Platform**: Windows 10/11 **64-bit (x64)** — **this app is Windows-only** and does not run on Windows ARM (core modules are cross-platform, but the UI, text insertion and installer are built for Windows x64)
-- **Version**: 1.2.0 — Windows installer (`DikteYar-Setup-1.2.0-x64.exe`) available under [Releases](https://github.com/nimaone/persian-whisper-flow/releases/latest)
+- **Version**: 1.2.1 — Windows installer (`DikteYar-Setup-1.2.1-x64.exe`) available under [Releases](https://github.com/nimaone/persian-whisper-flow/releases/latest)
 
 ## Features
 
@@ -95,9 +95,9 @@ Note: single words that also occur in normal speech (like «سوال») are neve
 
 ## Settings
 
-Tray menu → "تنظیمات" (Settings). Five tabs (changes apply on "ذخیره"/Save; "بازنشانی"/Reset restores defaults):
+Tray menu → "تنظیمات" (Settings). Five tabs (changes apply on "ذخیره"/Save; "بازنشانی"/Reset restores defaults) — the customtkinter build has the same model-folder card:
 
-- **General (عمومی)**: hotkey capture, start/stop beeps, live overlay + its font size, run at startup
+- **General (عمومی)**: hotkey capture, start/stop beeps, live overlay + its font size, run at startup, **model folder** (use "مرور…"/Browse to point at a folder containing `model.onnx` and `tokens.txt`; "پیش‌فرض"/Default is the folder next to the app — an empty chosen folder gets the download, and the change reloads the model on save)
 - **Microphone (میکروفون)**: input device ("خودکار"/Auto = strongest-signal mic probed at recording start), live spectral test, auto-stop on silence
 - **Text insertion (درج متن)**: insertion method (clipboard recommended / direct typing), clipboard restore, enable/disable voice commands, Persian ITN
 - **Advanced (پیشرفته)**: model inference threads (applied after restart), engine about
@@ -132,7 +132,7 @@ spikes/             CLI test tools
 - Mic auto-detection: all input devices are probed with a 0.35 s signal test and the strongest is picked.
 - Clipboard insertion restores the previous clipboard content afterwards (~600 ms wait for slow apps like Electron).
 - Windows get dark title bars and rounded corners via DWM and appear with alpha-fade (no white flash).
-- Settings live in `%APPDATA%\WhisperFlowFarsi\settings.json`.
+- Settings live in `%APPDATA%\WhisperFlowFarsi\settings.json`. Keys include `hotkey`, `paste_method`, `voice_commands`, …, `stable_live`, and `model_dir` (custom model folder — empty/`null` means the default next to the app).
 - **Persian ITN**: spoken numbers («بیست و سه», «سی‌وپنج») are converted to digits (۲۳, ۳۵) on insertion — toggleable in Settings. Small standalone numbers («یک», «هشت») intentionally stay as words.
 
 ## Limitations
@@ -159,7 +159,7 @@ spikes/             CLI test tools
 Output: `dist/DikteYar/` — a folder you can zip as a portable build. Notes:
 
 - **onedir, not onefile** — instant startup; onefile extracts ~150 MB to temp on every launch and misbehaves with keyboard hooks and antivirus.
-- **The model is not bundled** (light installer) — on first run a dialog offers an automatic download from GitHub Releases (~440 MB) or manual selection of a folder containing the files.
+- **The model is not bundled** (light installer) — on first run a dialog offers an automatic download from GitHub Releases (~440 MB) or manual selection of a folder containing the files; the download goes to the folder chosen in settings. The model folder can also be changed later from the General settings tab.
 - `version_info.txt` provides the Windows version resource (name/version/icon in file Properties).
 - For a full local test, copy `model/` next to `DikteYar.exe` to skip the first-run dialog.
 
@@ -170,7 +170,7 @@ winget install JRSoftware.InnoSetup
 "C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\dikteyar.iss
 ```
 
-Output: `installer/Output/DikteYar-Setup-1.2.0-x64.exe` (~36 MB). Highlights: **per-user** install into `%LOCALAPPDATA%\Programs\DikteYar` (no admin required), optional desktop shortcut, run-at-startup checkbox, and the model is excluded from the payload so the installer stays light even if you copied it next to the exe for testing.
+Output: `installer/Output/DikteYar-Setup-1.2.1-x64.exe` (~36 MB). Highlights: **per-user** install into `%LOCALAPPDATA%\Programs\DikteYar` (no admin required), optional desktop shortcut, run-at-startup checkbox, and the model is excluded from the payload so the installer stays light even if you copied it next to the exe for testing.
 
 ## License & Credits
 

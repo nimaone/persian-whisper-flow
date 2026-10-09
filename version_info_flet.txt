@@ -2,8 +2,8 @@
 # Windows version resource — دیکته‌یار
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 1, 0, 0),
-    prodvers=(1, 1, 0, 0),
+    filevers=(1, 2, 1, 0),
+    prodvers=(1, 2, 1, 0),
     mask=0x3F,
     flags=0x0,
     OS=0x40004,
@@ -16,12 +16,12 @@ VSVersionInfo(
       StringTable("040904B0", [
         StringStruct("CompanyName", "DikteYar contributors"),
         StringStruct("FileDescription", "DikteYar Flet (دیکته‌یار — نسخه فلت) — Persian offline dictation"),
-        StringStruct("FileVersion", "1.2.0"),
+        StringStruct("FileVersion", "1.2.1"),
         StringStruct("InternalName", "DikteYarFlet"),
         StringStruct("LegalCopyright", "Apache License 2.0 — model: Apache-2.0 (Shenava Koochik by Reza2kn)"),
         StringStruct("OriginalFilename", "DikteYarFlet.exe"),
         StringStruct("ProductName", "DikteYarFlet"),
-        StringStruct("ProductVersion", "1.2.0"),
+        StringStruct("ProductVersion", "1.2.1"),
       ])
     ]),
     VarFileInfo([VarStruct("Translation", [1033, 1200])]),

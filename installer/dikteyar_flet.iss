@@ -3,14 +3,14 @@
 ;   ۱) کلاینت فلت: packaging/flet-windows.zip (v1.0.3) — طبق توضیح dikteyar_flet.spec
 ;   ۲) .venv\Scripts\python.exe -m PyInstaller dikteyar_flet.spec --noconfirm
 ;   ۳) ISCC.exe installer\dikteyar_flet.iss
-; خروجی: installer\Output\DikteYar-Flet-Setup-1.2.0-x64.exe
+; خروجی: installer\Output\DikteYar-Flet-Setup-1.2.1-x64.exe
 ;
 ; AppId جدای نسخه CTk — نصب کنار هم مجاز است (پوشه و Uninstall مستقل).
 ; طراحی per-user: نصب در LocalAppData بدون نیاز به دسترسی مدیر.
 
 #define MyAppName "DikteYarFlet"
 #define MyAppNameFa "دیکته‌یار — فلت"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.2.1"
 #define MyAppPublisher "DikteYar contributors"
 #define MyAppExeName "DikteYarFlet.exe"
 #define MyAppURL "https://github.com/nimaone/persian-whisper-flow"
