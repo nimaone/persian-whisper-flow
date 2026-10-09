@@ -34,6 +34,8 @@ installer/Output/
 output/
 sample/
 spikes/speech_rate/
+nemotron/
+shenava/
 
 # کلاینت دسکتاپ فلت برای بیلد — دانلودشده، باندل نمیشود در گیت
 packaging/
