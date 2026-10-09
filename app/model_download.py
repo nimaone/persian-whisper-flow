@@ -18,7 +18,10 @@ GITHUB_RELEASE_TAG = "v1.1.0"
 HF_BASE = "https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx/resolve/main"
 
 FILE_NAMES = ("model.onnx", "tokens.txt")
-EXPECTED_MIN = {"model.onnx": 1_000_000, "tokens.txt": 10_000}
+# کف سایز — فقط برای وقتی سرور Content-Length نمیدهد. مدل واقعی ~۴۴۰MB
+# است؛ کف بالاتر از هر قطعی «ن majority» پروکسی نگه داشته شده تا فایل ناقص
+# کامل به نظر نرسد (قطعیشکل واقعی: پاسخ در ۴.۲MB تمام شد و بیصدا رد شد).
+EXPECTED_MIN = {"model.onnx": 100_000_000, "tokens.txt": 10_000}
 
 
 def model_files(model_dir: Path) -> list[Path]:
@@ -42,6 +45,11 @@ def _download(url: str, dest: Path, progress_cb=None) -> bool:
 
     نکته: فایل موقت باید در همان درایو مقصد باشد — os.replace بین دو
     درایو OSError می‌دهد (باگ واقعی اولین تست: Temp در C:، مقصد در J:).
+
+    کف سایز/کاملبودن: پروکسی یا ISP گاهی پاسخ را میان‌راه قطع میکند و
+    تراکنش بیerror تمام به نظر میرسد. با Content-Length، حجم دریافتی با
+    اعلامشده مقایسه میشود؛ بدون آن، کف EXPECTED_MIN نگهبان است. در هر
+    دو حالت فایل ناقص جایگذاری نمیشود تا اپ با مدل ناقص لود نشود.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(dest.name + ".part")
@@ -58,6 +66,10 @@ def _download(url: str, dest: Path, progress_cb=None) -> bool:
                     done += len(chunk)
                     if progress_cb:
                         progress_cb(done, total or done)
+            if (total and done != total) or done < EXPECTED_MIN.get(dest.name, 1):
+                # پاسخ ناقط — فایل موقت دور ریخته میشود تا جایگذاری نشود
+                tmp.unlink(missing_ok=True)
+                return False
             tmp.replace(dest)
             return True
     except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
