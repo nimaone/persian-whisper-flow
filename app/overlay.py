@@ -9,7 +9,12 @@
 
 متن دو تکه است: پیشوند قفل‌شده با رنگ روشن و پنجره‌ی جاری — واژه‌هایی
 که هنوز قطعی نشده‌اند — با رنگ کم‌رنگ، تا کاربر بداند کدام بخش سند
-نهایی و کدام بخش هنوز در حال شکل‌گرفتن است.
+نهایی و کدام بخش هنوز در حال شکل‌گرفیست.
+
+کارت با موس جابه‌جا می‌شود (کشیدن روی خود کارت): تا وقتی کاربر خودش
+جایی نگذاشته، هر ضبط تازه کنار نشانگر موس باز می‌شود؛ از لحظه‌ی
+اولین کشیدن، جای دستی کاربر یادش می‌ماند و ضبط‌های بعدی همان‌جا باز
+می‌شوند (تا ری‌استارت اپ).
 """
 from __future__ import annotations
 
@@ -30,6 +35,54 @@ BODY_W = 440
 MAX_CARD_FRAC = 0.55   # سقف ارتفاع کارت نسبت به ارتفاع صفحه
 CHROME_H = 96          # هدر + موج + پدینگ‌ها — ارتفاع ثابت کارت
 AVG_WORD_CHARS = 6.0   # میانگین طول واژه‌ی فارسی با فاصله
+EDGE_MARGIN = 8        # کمترین فاصله‌ی کارت از لبه‌ی صفحه
+
+# GetSystemMetrics — مستطیل کل دسکتاپ (همه‌ی مانیتورها)
+SM_XVIRTUALSCREEN = 76
+SM_YVIRTUALSCREEN = 77
+SM_CXVIRTUALSCREEN = 78
+SM_CYVIRTUALSCREEN = 79
+
+
+def virtual_screen() -> tuple[int, int, int, int] | None:
+    """مستطیل همه‌ی مانیتورها به‌شکل (x, y, w, h) — None اگر در دسترس نبود.
+
+    Tk روی ویندوز فقط «اسکرین» (مانیتور اصلی) را می‌شناسد؛ برای اینکه کارت
+    روی مانیتور دوم هم آزادانه جابه‌جا شود، مرجع باید کل دسکتاپ باشد —
+    که مبدأش می‌تواند منفی هم باشد (مانیتور سمت چپ).
+    """
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32  # noqa: SLF001
+        x = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+        y = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+        w = user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+        h = user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+        if w > 0 and h > 0:
+            return int(x), int(y), int(w), int(h)
+    except Exception:
+        pass
+    return None
+
+
+def clamp_pos(x: int, y: int, w: int, h: int,
+              screen: tuple[int, int, int, int] | None,
+              margin: int = EDGE_MARGIN) -> tuple[int, int]:
+    """مختصات را مثل کلیپ درون `screen` نگه می‌دارد — خروجی همیشه int.
+
+    screen=None یعنی منابع مرجع نداریم؛ مختصات دست‌نخورده برمی‌گردد.
+    """
+    if screen is None or w <= 0 or h <= 0:
+        return int(x), int(y)
+    sx, sy, sw, sh = screen
+    left = sx + margin
+    top = sy + margin
+    right = sx + sw - w - margin
+    bottom = sy + sh - h - margin
+    cx = min(max(int(x), left), max(left, right))
+    cy = min(max(int(y), top), max(top, bottom))
+    return cx, cy
 
 
 def split_display(text: str, provisional_words: int, limit: int) -> tuple[str, str, bool]:
@@ -129,6 +182,80 @@ class Overlay:
         self._visible = False
         self._recording = False
 
+        # جابه‌جایی با موس — _enable_drag روی کارت و همه‌ی فرزندانش بایند می‌شود
+        self._drag_off: tuple[int, int] | None = None
+        self._manual_pos: tuple[int, int] | None = None
+        self._enable_drag(self.card)
+
+    # ---------- جابه‌جایی با موس ----------
+    def _enable_drag(self, widget):
+        """کشیدن کارت با موس — روی ویجت و همه‌ی فرزندانش (متن/موج/هدر).
+
+        ویجت‌ها رویداد را به والد نمی‌دهند، پس بایند باید تک‌تک شود؛ وگرنه
+        کشیدن فقط روی حاشیه‌ی کارت کار می‌کند و روی خود متن نه.
+
+        نکته: ویجت‌های CustomTkinter (CTkFrame/CTkLabel/…) bind خودشان را روی
+        canvas درونی‌شان می‌برند و فقط `add="+"` را می‌پذیرند؛ پس همان یکی
+        کافی است و اجزای درونی‌شان (`_canvas`/`_label`) دوباره بایند نمی‌شوند.
+        """
+        self._bind_drag(widget)
+        for child in widget.winfo_children():
+            if self._is_internal_child(widget, child):
+                continue  # اجزای درونی CTk — از bind خودش پوشش داده شده
+            self._enable_drag(child)
+
+    @staticmethod
+    def _is_internal_child(parent, child) -> bool:
+        """ویجت درونی CustomTkinter — هر ویجتی که والد به‌طور خصوصی نگهش داشته."""
+        return any(value is child
+                   for key, value in vars(parent).items() if key.startswith("_"))
+
+    def _bind_drag(self, widget) -> bool:
+        try:
+            widget.bind("<ButtonPress-1>", self._drag_start, add="+")
+            widget.bind("<B1-Motion>", self._drag_move, add="+")
+            widget.bind("<ButtonRelease-1>", self._drag_end, add="+")
+        except (tk.TclError, ValueError):
+            return False  # ویجت بایندپذیر نبود — بقیه‌ی شاخه‌ها امتحان می‌شوند
+        try:
+            widget.configure(cursor="fleur")  # نشانه‌ی «قابل کشیدن»
+        except Exception:
+            pass
+        return True
+
+    def _drag_start(self, e):
+        """فاصله‌ی موس تا گوشه‌ی پنجره — تا کارت زیر موس نپرد."""
+        self._drag_off = (e.x_root - self.root.winfo_x(),
+                          e.y_root - self.root.winfo_y())
+
+    def _drag_move(self, e):
+        if self._drag_off is None:
+            return
+        try:
+            w = self.root.winfo_width()
+            h = self.root.winfo_height()
+        except tk.TclError:
+            return
+        x = e.x_root - self._drag_off[0]
+        y = e.y_root - self._drag_off[1]
+        x, y = clamp_pos(x, y, w or 1, h or 1, self._screen_rect())
+        self.root.geometry(f"+{x}+{y}")
+        self._manual_pos = (x, y)
+
+    def _drag_end(self, e=None):
+        self._drag_off = None
+
+    def _screen_rect(self) -> tuple[int, int, int, int] | None:
+        """مرجع کلیپ‌کردن مختصات — کل دسکتاپ؛ در نبودش مانیتور اصلی."""
+        rect = virtual_screen()
+        if rect is not None:
+            return rect
+        try:
+            return (0, 0, self.root.winfo_screenwidth(),
+                    self.root.winfo_screenheight())
+        except tk.TclError:
+            return None
+
     # ---------- مکان‌یابی ----------
     def _reflow(self):
         """اندازه‌ی کارت را با محتوای فعلی هم‌تراز می‌کند و در صفحه نگه می‌دارد."""
@@ -140,15 +267,13 @@ class Overlay:
         self._clamp_on_screen()
 
     def _clamp_on_screen(self):
-        """کارت با رشد متن از لبه‌ی پایین/راست صفحه بیرون نزند."""
+        """کارت با رشد متن یا کشیدن دستی از لبه‌ی صفحه بیرون نزند."""
         try:
             x, y = self.root.winfo_x(), self.root.winfo_y()
-            sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+            w, h = self.root.winfo_width(), self.root.winfo_height()
         except tk.TclError:
             return
-        w, h = self.root.winfo_width(), self.root.winfo_height()
-        pos_x = min(max(8, x), max(8, sw - w - 8))
-        pos_y = min(max(8, y), max(8, sh - h - 8))
+        pos_x, pos_y = clamp_pos(x, y, w, h, self._screen_rect())
         if (pos_x, pos_y) != (x, y):
             self.root.geometry(f"+{pos_x}+{pos_y}")
 
@@ -176,9 +301,10 @@ class Overlay:
         self._reflow()
         w = self.root.winfo_width()
         h = self.root.winfo_height()
-        pos_x = min(max(8, x - int(w * 0.3)), self.root.winfo_screenwidth() - w - 8)
-        pos_y = min(max(8, y + 26), self.root.winfo_screenheight() - h - 8)
-        self.root.geometry(f"+{pos_x}+{pos_y}")
+        # بدون کلیپ مستقیم — کارت همان‌جا باز می‌شود که موس است و بعد
+        # روی لبه‌ها کلیپ می‌شود (مانیتور دوم را هم پوشش می‌دهد)
+        self.root.geometry(f"+{x - int(w * 0.3)}+{y + 26}")
+        self._clamp_on_screen()
 
     # ---------- رابط عمومی ----------
     def show(self):
@@ -186,13 +312,23 @@ class Overlay:
             self._bars = [0.05] * WAVE_BARS
             self._recording = True
             self.dot.pack(side="right")
-            self.hint.configure(text="همان کلید را دوباره بزن تا درج شود")
+            self.hint.configure(text="بکش تا جابه‌جا شود — همان کلید را دوباره بزن")
             self.header.pack(fill="x", padx=PAD, pady=(10, 0))
             self._live_text = ""
             self._live_prov = 0
             self._render_parts("در حال شنیدن…")
             self.root.deiconify()
-            self.place_near_mouse()
+            if self._manual_pos is None:
+                self.place_near_mouse()
+            else:
+                # کاربر کارت را جابه‌جا کرده — ضبط بعدی همان‌جا باز می‌شود
+                x, y = clamp_pos(*self._manual_pos,
+                                 self.root.winfo_width() or 1,
+                                 self.root.winfo_height() or 1,
+                                 self._screen_rect())
+                self._manual_pos = (x, y)
+                self.root.geometry(f"+{x}+{y}")
+                self._reflow()
             self._visible = True
 
     def hide(self):
