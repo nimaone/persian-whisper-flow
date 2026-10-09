@@ -1,7 +1,7 @@
 """صفحه‌ی «اولین اجرا» در UI فلت — قرینه‌ی app/first_run.py بدون Tk.
 
 اگر فایل‌های مدل سر جایشان نباشند، نسخه‌ی CTk یک دیالوگ Tk باز می‌کند.
-در فلت همان جریان داخل خود پنجره پیاده شده است:
+در فلت همان جریان داخل خود پنجره پیاده شده است، با دو گزینه‌ی دستی:
   «دانلود خودکار»  — ~۴۳۸MB از Release گیت‌هاب با فالبک HuggingFace
   «انتخاب دستی»    — پوشه‌ای که کاربر خودش فایل‌ها را در آن گذاشته
 
@@ -29,9 +29,19 @@ BODY = ("مدل تشخیص گفتار (~۴۴۰MB) همراه نصب‌کننده
 PICK_TITLE = "پوشه‌ای که model.onnx و tokens.txt در آن است را انتخاب کنید"
 
 
-def model_ready() -> bool:
+def active_model_dir() -> Path:
+    """پوشه مدل فعال — تنظیم دلخواه کاربر اگر باشد، وگرنه پیشفرض."""
+    try:
+        from app.config import Config
+        return model_dir(Config.load().get("model_dir"))
+    except Exception:
+        return model_dir()
+
+
+def model_ready(md: Path | None = None) -> bool:
     """آیا فایل‌های مدل کنار پروژه/نصب موجودند؟"""
-    return model_download.is_complete(model_dir())
+    d = Path(md) if md is not None else active_model_dir()
+    return model_download.is_complete(d)
 
 
 class FirstRunWindow:
@@ -46,7 +56,7 @@ class FirstRunWindow:
         self.page = page
         self.on_ready = on_ready
         self.on_quit = on_quit
-        self.md = Path(md) if md is not None else model_dir()
+        self.md = Path(md) if md is not None else active_model_dir()
         # تزریق وابستگی — تست بدون شبکه و بدون دیالوگ سیستم
         self._download = download_fn or model_download.download_model
         self._pick_dir = pick_dir_fn  # sync: () -> str | None (تست)
@@ -160,6 +170,24 @@ class FirstRunWindow:
         self._flush_sync()
 
     # ---------- انتخاب دستی پوشه ----------
+    async def _pick_dir_dialog(self) -> str | None:
+        """دیالوگ انتخاب پوشه — انتخابگر باید اول به صفحه وصل شود
+        (page.services) وگرنه get_directory_path خطای «کنترل ثبتنشده»
+        می‌دهد."""
+        picker = ft.FilePicker()
+        try:
+            self.page.services.append(picker)
+            self.page.update()
+            return await picker.get_directory_path(dialog_title=PICK_TITLE)
+        except Exception as ex:
+            self._fail(f"انتخاب پوشه ممکن نشد: {str(ex)[:50]}")
+            return None
+        finally:
+            try:
+                self.page.services.remove(picker)
+            except Exception:
+                pass
+
     async def _pick_folder(self, e=None):
         if self._busy:
             return
@@ -167,12 +195,7 @@ class FirstRunWindow:
         if self._pick_dir is not None:
             folder = self._pick_dir()
         else:
-            try:
-                picker = ft.FilePicker()
-                folder = await picker.get_directory_path(dialog_title=PICK_TITLE)
-            except Exception as ex:
-                self._fail(f"انتخاب پوشه ممکن نشد: {str(ex)[:50]}")
-                return
+            folder = await self._pick_dir_dialog()
         if not folder:
             return  # کاربر انصراف داد
         self._apply_folder(Path(folder))

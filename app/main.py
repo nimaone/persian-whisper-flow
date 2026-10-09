@@ -149,7 +149,7 @@ class App:
             try:
                 from app.hotword_asr import load_hotword_engine
                 return load_hotword_engine(
-                    model_dir=model_dir(),
+                    model_dir=model_dir(self.cfg.get("model_dir")),
                     num_threads=int(self.cfg.get("num_threads") or 4),
                     hotwords=self._hotwords(),
                 )
@@ -160,7 +160,7 @@ class App:
         if bool(self.cfg.get("stable_live")):
             try:
                 return DirectCtcAsrEngine(
-                    model_dir=model_dir(),
+                    model_dir=model_dir(self.cfg.get("model_dir")),
                     num_threads=int(self.cfg.get("num_threads") or 4),
                     beam_width=2,
                 )
@@ -616,11 +616,16 @@ class App:
 
     @property
     def _engine_key(self):
-        """امضای تنظیماتی که نوع موتور را تعیین می‌کند."""
+        """امضای تنظیماتی که نوع موتور را تعیین میکند.
+
+        پوشه مدل هم تخصیص یافته — تغییرش (از نسخه فلت یا فایل تنظیمات)
+        باید موتور را از پوشه تازه بازسازی کند.
+        """
         return (
             bool(self.cfg.get("hotword_boost")),
             tuple(self._hotwords()),
             bool(self.cfg.get("stable_live")),
+            str(self.cfg.get("model_dir") or ""),
         )
 
     def _rebuild_engine(self):

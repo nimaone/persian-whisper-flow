@@ -281,16 +281,19 @@ class BackendConfig(unittest.TestCase):
             app.cfg.set("hotwords", ["نیما", "x", "ويسپر"])
             k1 = app._engine_key
             self.assertNotEqual(k0, k1)
-            # واژه‌ی تک‌حرفی فیلتر می‌شود
-            self.assertEqual(k1, (True, ("نیما", "ويسپر"), False))
+            # واژه‌ی تک‌حرفی فیلتر می‌شود — عضو چهارم پوشه مدل است
+            self.assertEqual(k1, (True, ("نیما", "ويسپر"), False, ""))
             # واژه‌های ثبت‌صوتی هم به هات‌وورد اضافه می‌شوند (هر دو حالت روشن)
             _enroll_mod.store_path().write_text(
                 '{"entries": [{"word": "دیکته‌یار", "variants": ["ویسپر فلوی فارسی"]}]}',
                 encoding="utf-8")
             k2 = app._engine_key
-            self.assertEqual(k2, (True, ("نیما", "ويسپر", "دیکته‌یار"), False))
+            self.assertEqual(k2, (True, ("نیما", "ويسپر", "دیکته‌یار"), False, ""))
             # تغییر متن زنده پایدار هم موتور را عوض می‌کند
             app.cfg.set("stable_live", True)
+            self.assertNotEqual(k2, app._engine_key)
+            # تغییر پوشه مدل هم موتور را عوض می‌کند (از پوشه تازه لود شود)
+            app.cfg.set("model_dir", r"D:\models\persian")
             self.assertNotEqual(k2, app._engine_key)
             fake.unlink(missing_ok=True)
 

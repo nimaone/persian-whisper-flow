@@ -248,7 +248,7 @@ class DictationApp:
             try:
                 from app.hotword_asr import load_hotword_engine
                 return load_hotword_engine(
-                    model_dir=model_dir(),
+                    model_dir=model_dir(self.cfg.get("model_dir")),
                     num_threads=int(self.cfg.get("num_threads") or 4),
                     hotwords=self._hotwords(),
                 )
@@ -259,13 +259,13 @@ class DictationApp:
         if bool(self.cfg.get("stable_live")):
             try:
                 return DirectCtcAsrEngine(
-                    model_dir=model_dir(),
+                    model_dir=model_dir(self.cfg.get("model_dir")),
                     num_threads=int(self.cfg.get("num_threads") or 4),
                     beam_width=2,
                 )
             except Exception as e:
                 self._notify(f"موتور متن پایدار فعال نشد؛ موتور عادی: {str(e)[:60]}")
-        return load_engine(model_dir=model_dir(),
+        return load_engine(model_dir=model_dir(self.cfg.get("model_dir")),
                            num_threads=int(self.cfg.get("num_threads") or 4))
 
     def _load_model(self):
@@ -653,9 +653,14 @@ class DictationApp:
 
     @property
     def _engine_key(self):
-        """امضای تنظیماتی که نوع موتور را تعیین می‌کند."""
+        """امضای تنظیماتی که نوع موتور را تعیین می‌کند.
+
+        پوشه مدل هم تخصیص یافته — تغییرش در تنظیمات باید موتور را از
+        پوشه تازه بازسازی کند (باگ: مدل قدیمی در حافظه میماند).
+        """
         return (bool(self.cfg.get("hotword_boost")), tuple(self._hotwords()),
-                bool(self.cfg.get("stable_live")))
+                bool(self.cfg.get("stable_live")),
+                str(self.cfg.get("model_dir") or ""))
 
     def _rebuild_engine(self):
         """تعویض موتور در thread پس‌زمینه — مثل استارتاپ: LOADING → IDLE."""

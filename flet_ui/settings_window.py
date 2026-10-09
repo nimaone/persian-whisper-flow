@@ -15,7 +15,8 @@ import time
 import flet as ft
 import numpy as np
 
-from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config
+from app.config import (APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config,
+                        model_dir)
 from flet_ui import theme as t
 
 REC_MAX_SEC = 10.0  # سقف ایمنی ضبط ثبت واژه — توقف خودکار
@@ -211,13 +212,102 @@ class SettingsWindow:
             )
         )
 
-        return ft.Column([c_hotkey, c_live], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
+        # ---------- پوشه مدل (جایگزینی/تعویض مسیر) ----------
+        # کادر فقط نشاندنن مسیر فعال است (فقطخواندنی)؛ مقدار دلخواه در
+        # self._model_dir_custom نگه داشته میشود — None یعنی پیشفرض کنار برنامه
+        self._model_dir_custom = cfg.get("model_dir") or None
+        self.model_path = ft.TextField(
+            value=str(model_dir(self._model_dir_custom)), read_only=True,
+            bgcolor=t.SURFACE_2, border_color=t.BORDER, border_radius=8,
+            text_style=t.fam("Regular", 11), height=38, rtl=True, expand=True,
+        )
+        self.model_status = ft.Text("", style=t.fam("Regular", 11),
+                                    text_align=ft.TextAlign.RIGHT)
+        btn_browse = ft.Button(content="مرور…", on_click=self._browse_model_dir,
+                               height=36, bgcolor=t.SURFACE_2, color=t.FG,
+                               style=t.btn_style(size=12, hpad=14))
+        btn_default = ft.Button(content="پیش‌فرض", on_click=self._model_default_dir,
+                                height=36, bgcolor=t.SURFACE_2, color=t.FG_DIM,
+                                style=t.btn_style(size=12, hpad=14))
+        c_model = t.card(
+            "پوشه مدل تشخیص گفتار",
+            ft.Row([t.row_label("مسیر مدل"), self.model_path]),
+            ft.Container(padding=ft.Padding(left=0, top=6)),
+            ft.Row([btn_browse, btn_default], spacing=8),
+            self.model_status,
+            t.dim("اگر مدل را از قبل در پوشه‌ی دیگری دارید، با «مرور…» همان پوشه را "
+                  "انتخاب کنید؛ «پیش‌فرض» یعنی پوشه کنار برنامه. اگر پوشه انتخابی "
+                  "خالی باشد، در اجرای بعد دانلود در همان‌جا انجام می‌شود. پس از "
+                  "ذخیره، مدل از پوشه تازه بارگذاری می‌شود."),
+        )
+        self._model_status_update()
+
+        return ft.Column([c_hotkey, c_live, c_model], spacing=10, expand=True,
+                         scroll=ft.ScrollMode.AUTO)
 
     def _font_slide(self, e):
         v = int(e.control.value)
         self.font_lbl.value = f"اندازه متن: {v}"
         self.sample.style = t.fam("Regular", v)
         self.page.update()
+
+    # ---------- پوشه مدل (تب عمومی) ----------
+    def _set_model_dir(self, folder: str | None):
+        """تنظیم پوشه دلخواه (None = پیشفرض) + به‌روزرسانی کادر و وضعیت."""
+        self._model_dir_custom = (folder or "").strip() or None
+        self.model_path.value = str(model_dir(self._model_dir_custom))
+        self._model_status_update()
+        self._safe_update(self.model_path)
+        self._safe_update(self.model_status)
+
+    def _model_status_update(self):
+        """وضعیت پوشه فعال — کامل/ناقص، با رنگ و پیام راهنما."""
+        active = model_dir(self._model_dir_custom)
+        try:
+            from app import model_download
+            complete = model_download.is_complete(active)
+        except Exception:
+            complete = False
+        if complete:
+            self.model_status.value = "مدل کامل ✓"
+            self.model_status.color = t.ACCENT
+        elif self._model_dir_custom:
+            # پوشه دلخواه ولی خالی — دانلود اجرای بعدی همانجا انجام میشود
+            self.model_status.value = ("در این پوشه model.onnx یا tokens.txt نیست — "
+                                       "اگر خالی باشد، دانلود در همین پوشه انجام می‌شود")
+            self.model_status.color = t.WARN
+        else:
+            self.model_status.value = ("پیش‌فرض: پوشه کنار برنامه — اگر مدل آنجا نباشد، "
+                                       "در اولین اجرا دانلود می‌شود")
+            self.model_status.color = t.FG_DIM
+
+    async def _browse_model_dir(self, e=None):
+        """انتخاب پوشه‌ی مدل با دیالوگ سیستم — انصراف چیزی را عوض نمی‌کند."""
+        folder = await self._pick_model_dir()
+        if folder:
+            self._set_model_dir(folder)
+
+    def _model_default_dir(self, e=None):
+        self._set_model_dir(None)
+
+    async def _pick_model_dir(self) -> str | None:
+        """دیالوگ انتخاب پوشه — انتخابگر باید اول به صفحه وصل شود
+        (page.services) وگرنه get_directory_path خطای «کنترل ثبتنشده»
+        می‌دهد. None یعنی انصراف کاربر یا خطای دیالوگ.
+        جدا از هندلر تا تست بتواند جایگزینش کند."""
+        picker = ft.FilePicker()
+        try:
+            self.page.services.append(picker)
+            self.page.update()
+            return await picker.get_directory_path(
+                dialog_title="پوشه‌ای که model.onnx و tokens.txt در آن است را انتخاب کنید")
+        except Exception:
+            return None
+        finally:
+            try:
+                self.page.services.remove(picker)
+            except Exception:
+                pass
 
     # ---------- کپچر کلید میانبر (قرینه‌ی capture_hotkey در CTk) ----------
     # فلگ‌های ctrl/alt در KeyboardEvent کلاینت ویندوز فلت قابل اعتماد
@@ -1057,7 +1147,7 @@ class SettingsWindow:
             from app.asr import load_engine
             from app.config import model_dir
             engine = load_engine(
-                model_dir=model_dir(),
+                model_dir=model_dir((self.cfg or {}).get("model_dir")),
                 num_threads=int((self.cfg or {}).get("num_threads") or 4))
             self._enroll_engine_obj = engine
             self._enroll_engine_loaded = True
@@ -1311,6 +1401,8 @@ class SettingsWindow:
             "auto_stop_sec": auto_stop_labels.get(self.var_auto_stop.value, 0),
             "hotword_boost": hw_on,
             "stable_live": bool(self.var_stable.value),
+            # پوشه مدل — None یعنی پیشفرض (کنار exe/پروژه)
+            "model_dir": self._model_dir_custom or None,
             # از خود سوییچ — وگرنه تغییر کاربر بی‌اثر بود و مقدار دیسک
             # pass-through می‌شد (قرینه‌ی cfg.set("enroll_alias") در CTk)
             "enroll_alias": bool(self.var_enroll.value),
@@ -1367,6 +1459,8 @@ class SettingsWindow:
             .get(int(data.get("auto_stop_sec") or 0), "خاموش")
         self.var_hotword.value = bool(data.get("hotword_boost"))
         self.txt_hotwords.value = "\n".join(str(w) for w in (data.get("hotwords") or []))
+        # پوشه مدل — کادر مسیر فعال را نشان میدهد و مقدار دلخواه جدا نگه میشود
+        self._set_model_dir(data.get("model_dir"))
         # سوییچ/یادداشت ثبت صوتی با حالت پایدارِ تازه همگام شود — وگرنه
         # پس از بازنشانی، حالت کهنه‌ی سوییچ و نکته‌ی هشدار می‌ماند
         self._sync_enroll_ui()

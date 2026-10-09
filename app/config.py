@@ -22,6 +22,7 @@ DEFAULTS = {
     "input_device": None,  # None = تشخیص خودکار
     "input_device_key": None,  # کلید پایدار دستگاه پین‌شده (نام — API) — ایندکس خام بین بوت‌ها ناپایدار است
     "autostart": False,
+    "model_dir": None,          # پوشه مدل دلخواه (مطلق) — None یعنی پیشفرض: کنار exe/پروژه
     "overlay_enabled": True,
     "num_threads": 4,
     "sound_feedback": True,      # بوق کوتاه شروع/پایان ضبط
@@ -46,7 +47,16 @@ def settings_path() -> Path:
     return app_data_dir() / "settings.json"
 
 
-def model_dir() -> Path:
+def model_dir(custom: str | None = None) -> Path:
+    """پوشه مدل — اگر کاربر پوشهی دلخواه (مطلق) داده باشد همان، وگرنه پیشفرض.
+
+    پیشفرض در frozen کنار exe است ({exe}\\model) و در سورس ریشهی پروژه.
+    مسیر نسبی/نامعتبر نادیده گرفته میشود تا آبکات برنامه خراب نشود.
+    """
+    if custom:
+        p = Path(str(custom)).expanduser()
+        if p.is_absolute():
+            return p
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent / "model"
     return Path(__file__).resolve().parent.parent / "model"

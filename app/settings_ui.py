@@ -9,12 +9,14 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
+from tkinter import filedialog
 
 import customtkinter as ctk
 import numpy as np
 
-from app import theme, smooth_ctk
-from app.config import APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config, set_autostart
+from app import model_download, theme, smooth_ctk
+from app.config import (APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config,
+                        model_dir, set_autostart)
 from app.recorder import (Recorder, dedupe_input_devices, detect_best_device,
                           device_label, device_siblings)
 from app.win32 import style_toplevel, smooth_show, disable_min_max
@@ -24,6 +26,20 @@ SPECS_BARS = 48
 SPECS_H = 20
 
 AUTO_STOP_LABELS = {"خاموش": 0, "۳ ثانیه": 3, "۵ ثانیه": 5, "۱۰ ثانیه": 10}
+
+
+def model_dir_status(custom: str | None, complete: bool) -> tuple[str, str]:
+    """(متن، رنگ) ردیف وضعیت کارت پوشه مدل — complete یعنی فایل‌های مدل موجودند.
+
+    جدا از بدنهی پنجره تا بدون ساخت UI سنجیده شود.
+    """
+    if complete:
+        return "مدل کامل ✓", theme.ACCENT
+    if custom:
+        return ("در این پوشه model.onnx یا tokens.txt نیست — اگر خالی باشد، "
+                "دانلود در همین پوشه انجام می‌شود"), theme.WARN
+    return ("پیش‌فرض: پوشه کنار برنامه — اگر مدل آنجا نباشد، "
+            "در اولین اجرا دانلود می‌شود"), theme.FG_DIM
 
 
 class MicTester:
@@ -278,6 +294,51 @@ def open_settings(parent_root, app=None):
 
     var_autostart = tk.BooleanVar(value=bool(cfg.get("autostart")))
     switch_row(cv, "اجرای خودکار با ورود به ویندوز", var_autostart, pady=(10, 0))
+
+    # --- کارت پوشه مدل ---
+    cmod = card(t_general, "پوشه مدل تشخیص گفتار")
+    # None یعنی پیشفرض (پوشه کنار برنامه/exe) — قرینهی model_dir همین پروژه
+    model_dir_custom = [cfg.get("model_dir") or None]
+    model_path_lbl = ctk.CTkLabel(cmod, text="", font=(fam, 12),
+                                  text_color=theme.FG, anchor="e")
+    model_path_lbl.pack(fill="x")
+
+    def _model_status_update():
+        d = model_dir(model_dir_custom[0])
+        txt, color = model_dir_status(model_dir_custom[0],
+                                      model_download.is_complete(d))
+        model_path_lbl.configure(text=str(d))
+        model_status.configure(text=txt, text_color=color)
+
+    def _set_model_dir(folder):
+        """folder: مسیر دلخواه یا None/خالی برای پیشفرض."""
+        model_dir_custom[0] = str(folder).strip() if folder else None
+        _model_status_update()
+
+    def _browse_model_dir():
+        folder = filedialog.askdirectory(
+            title="پوشه‌ای که model.onnx و tokens.txt در آن است را انتخاب کنید")
+        if folder:
+            _set_model_dir(folder)
+
+    mrow = ctk.CTkFrame(cmod, fg_color="transparent")
+    mrow.pack(fill="x", pady=(8, 0))
+    ctk.CTkButton(mrow, text="مرور…", width=110, height=36, corner_radius=8,
+                  font=(fam, 13), fg_color=theme.SURFACE_2,
+                  hover_color=theme.SURFACE_3, text_color=theme.FG,
+                  command=_browse_model_dir).pack(side="right")
+    ctk.CTkButton(mrow, text="پیش‌فرض", width=110, height=36, corner_radius=8,
+                  font=(fam, 12), fg_color=theme.SURFACE_2,
+                  hover_color=theme.SURFACE_3, text_color=theme.FG_DIM,
+                  command=lambda: _set_model_dir(None)).pack(side="right", padx=(8, 0))
+    model_status = ctk.CTkLabel(cmod, text="", font=(fam, 12), anchor="e",
+                                justify="right")
+    model_status.pack(fill="x", pady=(6, 0))
+    _model_status_update()
+    dim(cmod, "اگر مدل را از قبل در پوشه‌ی دیگری دارید، با «مرور…» همان پوشه را "
+              "انتخاب کنید؛ «پیش‌فرض» یعنی پوشه کنار برنامه. اگر پوشه انتخابی "
+              "خالی باشد، در اجرای بعد دانلود در همان‌جا انجام می‌شود. پس از "
+              "ذخیره، مدل از پوشه تازه بارگذاری می‌شود.")
 
     # ================= تب میکروفون =================
     t_mic = tabview.tab("میکروفون")
@@ -1035,6 +1096,7 @@ def open_settings(parent_root, app=None):
         _sync_enroll_ui()
         txt_hotwords.delete("1.0", "end")
         txt_hotwords.insert("1.0", "\n".join(str(w) for w in (data.get("hotwords") or [])))
+        _set_model_dir(data.get("model_dir"))
 
     def reset():
         _sync(dict(DEFAULTS))
@@ -1072,6 +1134,7 @@ def open_settings(parent_root, app=None):
         cfg.set("hotwords", hw_list)
         cfg.set("stable_live", bool(var_stable_live.get()))
         cfg.set("enroll_alias", bool(var_enroll.get()))
+        cfg.set("model_dir", model_dir_custom[0] or None)
         cfg.save()
         set_autostart(var_autostart.get())
         tester.stop()

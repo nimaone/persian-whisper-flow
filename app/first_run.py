@@ -25,9 +25,10 @@ def ensure_model() -> bool:
 
     خروج False یعنی کاربر انصراف داده و اپ باید ببندد.
     """
-    from app.config import model_dir
+    from app.config import Config, model_dir
 
-    md = model_dir()
+    # پوشه‌ی دلخواهِ ست‌شده در تنظیمات — دانلود/کپی اول اجرا همان‌جا انجام می‌شود
+    md = model_dir(Config.load().get("model_dir"))
     if model_download.is_complete(md):
         return True
     if not getattr(sys, "frozen", False):
