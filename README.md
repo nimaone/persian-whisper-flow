@@ -29,7 +29,7 @@ https://github.com/user-attachments/assets/070fce67-3225-4949-b35c-9d734daae93b
 - **مدل‌ها**: دو مدل قابل انتخاب — **شنوا کوچیک v1.0** (FastConformer NeMo CTC، ۱۱۴M، سبک/سریع، پیش‌فرض) و **نیموترون استریمینگ فارسی** (RNN-T، ۶۰۰M، دقیق‌تر) — هر دو از طریق sherpa-onnx و کاملاً آفلاین
 - **زبان**: Python 3.12 — رابط کاربری CustomTkinter (بدون وابستگی GUI سنگین)
 - **پلتفرم**: ویندوز ۱۰/۱۱ **۶۴بیتی (x64)** — **این اپ فقط برای ویندوز است** و روی ویندوز ARM اجرا نمی‌شود (هسته‌ی ماژول‌ها کراس‌پلتفرم است ولی رابط، درج متن و نصب‌کننده برای ویندوز x64 ساخته شده‌اند)
-- **نسخه**: 1.2.1 — نصب‌کننده‌ی ویندوز (`DikteYar-Setup-1.2.1-x64.exe`) در [Releases](https://github.com/nimaone/persian-whisper-flow/releases/latest)
+- **نسخه**: 1.3.0 — نصب‌کننده‌ی ویندوز (`DikteYar-Setup-1.3.0-x64.exe`) در [Releases](https://github.com/nimaone/persian-whisper-flow/releases/latest)
 
 ## ویژگی‌ها
 
@@ -222,7 +222,7 @@ winget install JRSoftware.InnoSetup
 "C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\dikteyar.iss
 ```
 
-خروجی: `installer/Output/DikteYar-Setup-1.2.1-x64.exe` (~۳۶MB). مشخصات: نصب **per-user** در `%LOCALAPPDATA%\Programs\DikteYar` بدون نیاز به دسترسی مدیر، شورتکات اختیاری دسکتاپ، تیک اجرای خودکار با ویندوز، و حذف مدل از محتوا (نصب‌کننده سبک می‌ماند حتی اگر برای تست مدل کنار exe باشد).
+خروجی: `installer/Output/DikteYar-Setup-1.3.0-x64.exe` (~۳۶MB). مشخصات: نصب **per-user** در `%LOCALAPPDATA%\Programs\DikteYar` بدون نیاز به دسترسی مدیر، شورتکات اختیاری دسکتاپ، تیک اجرای خودکار با ویندوز، و حذف مدل از محتوا (نصب‌کننده سبک می‌ماند حتی اگر برای تست مدل کنار exe باشد).
 
 ## لایسنس و سپاس‌ها
 
