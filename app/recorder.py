@@ -171,6 +171,30 @@ class Recorder:
         out = np.concatenate(tail)
         return out[-need:] if out.size > need else out
 
+    def get_from_16k(self, start: int) -> tuple[np.ndarray, int]:
+        """بافر 16k از نمونه‌ی start به بعد — برای تغذیه‌ی دلتی استریم transducer.
+
+        خروجی: (دلتا، کل نمونه‌های بافر). اگر start از کل بافر جلوتر بود
+        (هرس ابتدای بافر در ضبط طولانی‌تر از max_sec)، دلتای خالی برمی‌گردد —
+        caller باید موقعیت را به total ریست و نشست را ناقص علامت بزند.
+        """
+        self._drain()
+        with self._lock:
+            total = self._out_total
+            if start >= total:
+                return np.zeros(0, dtype=np.float32), total
+            skip = start
+            take: list[np.ndarray] = []
+            for part in self._out_parts:
+                if skip >= part.size:
+                    skip -= part.size
+                    continue
+                take.append(part[skip:] if skip else part)
+                skip = 0
+        if not take:
+            return np.zeros(0, dtype=np.float32), total
+        return (np.concatenate(take) if len(take) > 1 else take[0]), total
+
     def recent_rms(self) -> float:
         """RMS آخرین بلوک ضبط‌شده (~100ms) — برای نوار سطح overlay."""
         with self._lock:

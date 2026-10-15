@@ -23,6 +23,7 @@ DEFAULTS = {
     "input_device_key": None,  # کلید پایدار دستگاه پین‌شده (نام — API) — ایندکس خام بین بوت‌ها ناپایدار است
     "autostart": False,
     "model_dir": None,          # پوشه مدل دلخواه (مطلق) — None یعنی پیشفرض: کنار exe/پروژه
+    "model_id": "shenava-koochik",  # مدل فعال — شناسه‌های app/models_catalog.py
     "overlay_enabled": True,
     "num_threads": 4,
     "sound_feedback": True,      # بوق کوتاه شروع/پایان ضبط
