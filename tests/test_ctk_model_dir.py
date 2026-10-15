@@ -57,7 +57,7 @@ class FirstRunUsesCustomDir(unittest.TestCase):
                 with mock.patch("app.model_download.is_complete",
                                 return_value=True) as comp:
                     self.assertTrue(first_run.ensure_model())
-            comp.assert_called_once_with(d)
+            self.assertEqual(comp.call_args[0][0], d)
 
     def test_source_run_without_model_returns_false(self):
         with TemporaryDirectory() as td:
@@ -82,7 +82,7 @@ class FirstRunUsesCustomDir(unittest.TestCase):
                         with mock.patch.object(first_run, "_dialog",
                                                return_value=True) as dlg:
                             self.assertTrue(first_run.ensure_model())
-            dlg.assert_called_once_with(d)
+            self.assertEqual(dlg.call_args[0][0], d)
 
     def test_no_setting_falls_back_to_default(self):
         default = model_dir()
@@ -90,7 +90,7 @@ class FirstRunUsesCustomDir(unittest.TestCase):
             with mock.patch("app.model_download.is_complete",
                             return_value=True) as comp:
                 self.assertTrue(first_run.ensure_model())
-        comp.assert_called_once_with(default)
+        self.assertEqual(comp.call_args[0][0], default)
 
 
 if __name__ == "__main__":

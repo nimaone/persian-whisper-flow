@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import flet as ft
 
+from app import models_catalog
 from app.config import DEFAULTS, Config, model_dir
 from flet_ui import first_run_window as fr
 from flet_ui.backend import DictationApp
@@ -233,14 +234,14 @@ class BackendModelDir(unittest.TestCase):
     def test_engine_loader_uses_custom_folder(self):
         app = self._bare_app(model_dir=r"D:\models\persian")
         seen = {}
-        with mock.patch("flet_ui.backend.load_engine", side_effect=lambda **kw: seen.update(kw) or object()):
+        with mock.patch("app.engine_factory.load_engine", side_effect=lambda **kw: seen.update(kw) or object()):
             app._default_engine_loader()
         self.assertEqual(seen.get("model_dir"), Path(r"D:\models\persian"))
 
     def test_engine_loader_default_folder(self):
         app = self._bare_app()
         seen = {}
-        with mock.patch("flet_ui.backend.load_engine", side_effect=lambda **kw: seen.update(kw) or object()):
+        with mock.patch("app.engine_factory.load_engine", side_effect=lambda **kw: seen.update(kw) or object()):
             app._default_engine_loader()
         self.assertEqual(seen.get("model_dir"), model_dir())
 
@@ -249,7 +250,10 @@ class FirstRunWithCustomDir(unittest.TestCase):
     def test_model_ready_uses_explicit_dir(self):
         with TemporaryDirectory() as d:
             write_model(Path(d))
-            self.assertTrue(fr.model_ready(Path(d)))
+            # مدل فعال قطعی (shenava) — مستقل از settings.json واقعی ماشین
+            with mock.patch.object(fr, "active_model_spec",
+                                   models_catalog.default_model):
+                self.assertTrue(fr.model_ready(Path(d)))
 
     def test_model_ready_uses_setting(self):
         with TemporaryDirectory() as d:

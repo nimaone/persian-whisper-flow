@@ -22,8 +22,9 @@ from PIL import Image, ImageDraw
 
 from app import enroll, fa_post, paths, persian_itn, voice_commands
 from app import first_run
-from app.asr import DirectCtcAsrEngine, LiveTranscriber, SpeechGate, load_engine
-from app.config import APP_TITLE, Config, model_dir, set_autostart
+from app import engine_factory
+from app.asr import LiveTranscriber, SpeechGate
+from app.config import APP_TITLE, Config, set_autostart
 from app.control_window import ControlWindow
 from app.overlay import Overlay
 from app.paster import insert_text, send_key
@@ -38,6 +39,13 @@ STATE_TRANSCRIBING = "transcribing"
 PARTIAL_INTERVAL = 0.8  # ثانیه بین ترنسکرایپ‌های زنده
 SILENCE_RMS = 0.003     # آستانه سکوت برای توقف خودکار
 SPEECH_GATE_HANGOVER = 1.5  # ثانیه decode اضافه پس از آخرین صدا
+STREAM_FLASH_SEC = 4.0  # فلاش انتهای جمله در مسیر استریم: تا این ثانیه بعد از
+                        # آخرین صدای دیده‌شدهٔ گیت، feed با decode انجام می‌شود.
+                        # توکن‌های دنبالهٔ جمله توسط پنجره‌ای صادر می‌شوند که
+                        # ~۲.۵s بعد از پایان گفتار آماده می‌شود (کانتکست راست
+                        # ‏~۱s + هم‌ترازی چانک + پرشدن پنجره) + فاز tick — با
+                        # حاشیه ‏۴s پوشش داده می‌شود. بعد از drain، decodeهای
+                        # بعدی no-op مجانی‌اند؛ پس از این پنجره سکوت کامل.
 
 
 def _beep(start: bool):
@@ -90,6 +98,9 @@ class App:
         self._engine_dirty = False  # تنظیمات هات‌وورد عوض شده — پس از ضبط rebuild شود
         self._engine_rebuild_requested = False  # تغییر موتور در UI — بعد از بستن تنظیمات
         self._alias_map: dict[str, str] = {}  # واژه‌های ثبت‌شده — شکل شنیده → درست
+        self._nemo_stream = None  # نشست استریم پیوسته transducer حین ضبط (یا None)
+        self._nemo_fed = 0        # نمونه‌های 16k تغذیه‌شده در نشست جاری
+        self._nemo_ok = True      # False: نشست ناقص است → متن نهایی یک‌ضرب می‌رود
         self.refresh_alias_map()
 
     def refresh_alias_map(self):
@@ -140,33 +151,13 @@ class App:
         return out
 
     def _make_engine(self):
-        """موتور متناسب با تنظیمات: هات‌وورد (beam) یا عادی (گری‌دی sherpa).
+        """موتور متناسب با مدل و تنظیمات — از کارخانه‌ی مشترک با نسخه فلت.
 
-        اگر حالت هات‌وورد خواسته شده ولی موتورش ساخته نشد (وابستگی/مدل)،
-        با اطلاع‌رسانی به موتور عادی برمی‌گردیم تا اپ بی‌کار نماند.
+        مدل transducer (نیموترون) هات‌وورد/متن پایدار ندارد؛ کارخانه این را
+        لحاظ می‌کند و در نبود وابستگی به موتور عادی برمی‌گردد تا اپ بی‌کار نماند.
         """
-        if self.cfg.get("hotword_boost") and self._hotwords():
-            try:
-                from app.hotword_asr import load_hotword_engine
-                return load_hotword_engine(
-                    model_dir=model_dir(self.cfg.get("model_dir")),
-                    num_threads=int(self.cfg.get("num_threads") or 4),
-                    hotwords=self._hotwords(),
-                )
-            except Exception as e:
-                self._notify(f"حالت واژه‌های حساس فعال نشد؛ موتور عادی: {str(e)[:60]}")
-        # اگر متن پایدار خواسته شده، به‌جای sherpa + session دوم،
-        # یک session ONNX برای هم transcribe و هم امتیازدهی لود می‌کنیم.
-        if bool(self.cfg.get("stable_live")):
-            try:
-                return DirectCtcAsrEngine(
-                    model_dir=model_dir(self.cfg.get("model_dir")),
-                    num_threads=int(self.cfg.get("num_threads") or 4),
-                    beam_width=2,
-                )
-            except Exception as e:
-                self._notify(f"موتور متن پایدار فعال نشد؛ موتور عادی: {str(e)[:60]}")
-        return load_engine(num_threads=int(self.cfg.get("num_threads") or 4))
+        return engine_factory.make_engine(
+            self.cfg, notify=self._notify, hotwords=self._hotwords())
 
     def _load_model(self):
         for attempt in range(3):
@@ -342,6 +333,19 @@ class App:
         with self._state_lock:
             self.state = STATE_RECORDING
         self._silence_t0 = None
+        # نشست استریم پیوسته — فقط موتور transducer (نیموترون). شکست ساخت
+        # نشست = برگشت بی‌صدا به مسیر یک‌ضرب قبلی (re-decode پنجره).
+        old_stream = self._nemo_stream  # اگر ضبط قبلی مصرف نشده مانده باشد
+        self._nemo_stream = None
+        self._nemo_fed = 0
+        self._nemo_ok = True
+        if old_stream is not None:
+            old_stream.close()
+        if self.live is not None and self.live.supports_stream:
+            try:
+                self._nemo_stream = self.engine.begin_stream()
+            except Exception:
+                self._nemo_stream = None
         if self.live is not None:
             # گزینه‌ی متن پایدار در شروع هر ضبط از تنظیمات تازه خوانده می‌شود
             self.live.configure(bool(self.cfg.get("stable_live")))
@@ -397,7 +401,41 @@ class App:
                         (buf[-int(0.25 * 16000):].astype(np.float64) ** 2).mean()
                     )) if buf.size else 0.0
                     should_decode = gate.should_decode(gate_rms, now=t0)
-                    if should_decode:
+                    sess = self._nemo_stream
+                    if sess is not None:
+                        # مسیر استریم پیوسته (transducer): فقط صوتِ تازه به
+                        # نشست دائمی می‌رود و کش بین tickها زنده است — هر
+                        # پنجره فقط یک بار انکد می‌شود.
+                        delta, total = rec.get_from_16k(self._nemo_fed)
+                        if total < self._nemo_fed:
+                            # ابتدای بافر هرس شده (ضبط طولانی‌تر از سقف بافر):
+                            # پیوستگی نشست از دست رفته → متن نهایی یک‌ضرب می‌رود
+                            self._nemo_fed = total
+                            self._nemo_ok = False
+                            delta = delta[:0]
+                        # فلاش انتهای جمله: گیت تا ‏۱.۵s بعد از آخرین صدا باز
+                        # است ولی چانکِ دنبالهٔ جمله دیرتر آماده می‌شود — تا
+                        # STREAM_FLASH_SEC دیکد روشن می‌ماند تا دلتای همین
+                        # tick (که اغلب خودش پنجرهٔ معوق را کامل می‌کند) فلاش
+                        # شود؛ اگر چیزی آماده نباشد decode یک no-op مجانی است.
+                        since_speech = gate.since_last_speech(now=t0)
+                        decode = should_decode or (
+                            since_speech is not None
+                            and since_speech <= STREAM_FLASH_SEC)
+                        if delta.size or decode:
+                            text = sess.feed(delta, decode=decode)
+                            self._nemo_fed += delta.size
+                            if text is not None:
+                                text = post(text)
+                                # ثبت صوتی واژه در حالت پایدار اعمال نمی‌شود
+                                # (مطابق مسیر یک‌ضرب پایین)
+                                if self._alias_map and not self.cfg.get("stable_live"):
+                                    text = enroll.apply_aliases(text, self._alias_map)
+                                # متن نشست اضافه‌شونده و قطعی است — واژه‌ی
+                                # کم‌رنگِ جدا ندارد (tail صفر)
+                                self.ui_q.put(("tail", 0))
+                                self.ui_q.put(("text", text))
+                    elif should_decode:
                         res = self.live.partial_result(
                             buf, t_offset=max(
                                 0.0, rec.duration_sec() - buf.size / 16000.0))
@@ -443,10 +481,29 @@ class App:
             elapsed = time.perf_counter() - t0
             time.sleep(max(0.05, PARTIAL_INTERVAL - elapsed))
 
+    def _finish_nemo_stream(self) -> str | None:
+        """متن نهایی از نشست استریم پیوسته — None یعنی مسیر یک‌ضرب.
+
+        فقط وقتی نشست سالم و کامل تغذیه شده باشد استفاده می‌شود؛ در این
+        حالت کل صوت یک بار انکد شده و فلاش انتهایی همان متن نهایی است —
+        دیکد مجدد کل بافر لازم نیست (دقت هم‌ارز، طبق کارت مدل و تست parity).
+        """
+        sess = self._nemo_stream
+        self._nemo_stream = None
+        if sess is None or not self._nemo_ok or self.live is None \
+                or not self.live.supports_stream:
+            return None
+        try:
+            return sess.end()
+        except Exception:
+            return None
+
     def _finish(self, rec: Recorder):
         try:
-            buf = rec.get_buffer_16k()
-            text = self.live.final(buf) if self.live else ""
+            text = self._finish_nemo_stream()
+            if text is None:
+                buf = rec.get_buffer_16k()
+                text = self.live.final(buf) if self.live else ""
         except Exception:
             text = ""
         with self._state_lock:
@@ -616,17 +673,12 @@ class App:
 
     @property
     def _engine_key(self):
-        """امضای تنظیماتی که نوع موتور را تعیین میکند.
+        """امضای تنظیماتی که نوع موتور را تعیین می‌کند.
 
-        پوشه مدل هم تخصیص یافته — تغییرش (از نسخه فلت یا فایل تنظیمات)
-        باید موتور را از پوشه تازه بازسازی کند.
+        مدل فعال، پوشه مدل، هات‌وورد و متن پایدار — تغییر هرکدام باید
+        موتور را بازسازی کند.
         """
-        return (
-            bool(self.cfg.get("hotword_boost")),
-            tuple(self._hotwords()),
-            bool(self.cfg.get("stable_live")),
-            str(self.cfg.get("model_dir") or ""),
-        )
+        return engine_factory.engine_key(self.cfg, self._hotwords())
 
     def _rebuild_engine(self):
         """تعویض موتور در thread پس‌زمینه — مثل استارتاپ: LOADING → IDLE."""

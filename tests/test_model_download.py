@@ -14,7 +14,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import model_download  # noqa: E402
+from app import model_download, models_catalog  # noqa: E402
 
 
 class FakeResponse:
@@ -82,6 +82,48 @@ class Download(unittest.TestCase):
         floor = model_download.EXPECTED_MIN["model.onnx"]
         self.assertGreater(floor, 10_000_000)
         self.assertLess(floor, 400_000_000)
+
+
+class ModelDirResolution(unittest.TestCase):
+    """پوشه‌ی فایل‌های هر مدل — هم ساختار پیش‌فرض زیرپوشه، هم انتخاب دستی."""
+
+    def test_default_model_is_base(self):
+        with TemporaryDirectory() as td:
+            base = Path(td)
+            spec = models_catalog.get("shenava-koochik")
+            self.assertEqual(spec.resolve_dir(base), base)
+
+    def test_nemotron_defaults_to_subdir(self):
+        with TemporaryDirectory() as td:
+            base = Path(td)
+            spec = models_catalog.get("nemotron-farsi")
+            self.assertEqual(spec.resolve_dir(base), base / "nemotron")
+
+    def test_nemotron_files_in_subdir_are_complete(self):
+        with TemporaryDirectory() as td:
+            base = Path(td)
+            spec = models_catalog.get("nemotron-farsi")
+            sub = base / "nemotron"
+            sub.mkdir()
+            for f in spec.files:
+                (sub / f.name).write_bytes(b"x")
+            self.assertEqual(spec.resolve_dir(base), sub)
+            self.assertTrue(model_download.is_complete(base, spec))
+
+    def test_nemotron_accepts_files_directly_in_base(self):
+        """کاربر همان پوشه‌ی حاوی فایل‌ها را انتخاب کرده — نباید رد شود."""
+        with TemporaryDirectory() as td:
+            base = Path(td)
+            spec = models_catalog.get("nemotron-farsi")
+            for f in spec.files:
+                (base / f.name).write_bytes(b"x")
+            self.assertEqual(spec.resolve_dir(base), base)
+            self.assertTrue(model_download.is_complete(base, spec))
+
+    def test_missing_optional_subdir_is_not_complete(self):
+        with TemporaryDirectory() as td:
+            spec = models_catalog.get("nemotron-farsi")
+            self.assertFalse(model_download.is_complete(Path(td), spec))
 
 
 if __name__ == "__main__":

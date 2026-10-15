@@ -206,6 +206,7 @@ def test_live_transcriber_keeps_previous_result_on_identical_text():
 
 def test_app_engine_selection_and_fallback(monkeypatch):
     from app import main as main_module
+    from app import engine_factory
     from app.config import Config
 
     calls = {}
@@ -225,8 +226,8 @@ def test_app_engine_selection_and_fallback(monkeypatch):
         calls["hotword"] = kwargs
         return "hotword-engine"
 
-    monkeypatch.setattr(main_module, "load_engine", fake_plain)
-    monkeypatch.setattr(main_module, "DirectCtcAsrEngine", fake_direct)
+    monkeypatch.setattr(engine_factory, "load_engine", fake_plain)
+    monkeypatch.setattr(engine_factory, "DirectCtcAsrEngine", fake_direct)
     monkeypatch.setattr("app.hotword_asr.load_hotword_engine", fake_hotword)
 
     app.cfg.data["stable_live"] = True
@@ -245,7 +246,7 @@ def test_app_engine_selection_and_fallback(monkeypatch):
 
     app.cfg.data["hotword_boost"] = False
     app.cfg.data["stable_live"] = True
-    monkeypatch.setattr(main_module, "DirectCtcAsrEngine", broken_direct)
+    monkeypatch.setattr(engine_factory, "DirectCtcAsrEngine", broken_direct)
     assert app._make_engine() == "plain-engine"
 
 

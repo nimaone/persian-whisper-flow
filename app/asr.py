@@ -395,6 +395,17 @@ class SpeechGate:
             return False
         return (now - self._last_speech_at) <= self.hangover
 
+    def since_last_speech(self, now: float | None = None) -> float | None:
+        """ثانیه‌های سپری‌شده از آخرین صدای دیده‌شده — None اگر هنوز صدایی نبوده.
+
+        وضعیت را به‌روز نمی‌کند؛ در همان tick باید اول `should_decode`
+        صدا زده شده باشد تا صدای فعلی ثبت شود (برای فلاش انتهای جمله در
+        مسیر استریم — main.py/backend.py).
+        """
+        if self._last_speech_at is None:
+            return None
+        return (time.perf_counter() if now is None else float(now)) - self._last_speech_at
+
 
 class _WordMemory:
     """حافظه‌ی واژه‌های پنجره‌های قبلی — برای سیگنال رأی (votes) و رقیب (contest).
@@ -540,6 +551,15 @@ class LiveTranscriber:
         # اگر مسیر سبک انتخاب شد، session دوم ONNX دیگر لازم نیست.
         if not stable_live and hasattr(self.engine, "release_detail_decoder"):
             self.engine.release_detail_decoder()
+
+    @property
+    def supports_stream(self) -> bool:
+        """موتور نشست استریم پیوسته دارد (موتور transducer nemotron)؟
+
+        در مسیر استریم، حلقه‌ی زنده به‌جای re-decode پنجره، صوت تازه را به
+        نشست دائمی می‌دهد (main.py/backend.py این مسیر را مدیریت می‌کند).
+        """
+        return hasattr(self.engine, "begin_stream")
 
     def reset(self):
         """وضعیت پیشوند پایدار را برای ضبط جدید پاک می‌کند."""

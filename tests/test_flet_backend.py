@@ -281,14 +281,17 @@ class BackendConfig(unittest.TestCase):
             app.cfg.set("hotwords", ["نیما", "x", "ويسپر"])
             k1 = app._engine_key
             self.assertNotEqual(k0, k1)
-            # واژه‌ی تک‌حرفی فیلتر می‌شود — عضو چهارم پوشه مدل است
-            self.assertEqual(k1, (True, ("نیما", "ويسپر"), False, ""))
+            # واژه‌ی تک‌حرفی فیلتر می‌شود — عضو آخر پوشه مدل است
+            self.assertEqual(
+                k1, (True, ("نیما", "ويسپر"), False, "shenava-koochik", ""))
             # واژه‌های ثبت‌صوتی هم به هات‌وورد اضافه می‌شوند (هر دو حالت روشن)
             _enroll_mod.store_path().write_text(
                 '{"entries": [{"word": "دیکته‌یار", "variants": ["ویسپر فلوی فارسی"]}]}',
                 encoding="utf-8")
             k2 = app._engine_key
-            self.assertEqual(k2, (True, ("نیما", "ويسپر", "دیکته‌یار"), False, ""))
+            self.assertEqual(
+                k2, (True, ("نیما", "ويسپر", "دیکته‌یار"), False,
+                     "shenava-koochik", ""))
             # تغییر متن زنده پایدار هم موتور را عوض می‌کند
             app.cfg.set("stable_live", True)
             self.assertNotEqual(k2, app._engine_key)

@@ -2,6 +2,8 @@
 
 اطلاعات کامل مدل ASR که این اپ استفاده می‌کند. منبع: [HuggingFace](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0) و [GitHub پروژه](https://github.com/Reza2kn/shenava-1).
 
+> ℹ️ این سند مدل **پیش‌فرض** (شنوا کوچیک، کد `shenava-koochik`) را شرح می‌دهد. اپ حالا یک مدل دوم هم دارد — «نیموترون استریمینگ فارسی» (کد `nemotron-farsi`) — که جزئیات کاملش در [nemotron/hf_upload/README_FA.md](../nemotron/hf_upload/README_FA.md) است.
+
 ## مشخصات کلی
 
 | | |
@@ -72,6 +74,17 @@
 | [Rizeh 32M](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0) | ۳۲M | نسخه سبک‌تر |
 | [Rizeh-Pizeh 6.9M](https://huggingface.co/Reza2kn/Shenava-Rizeh-Pizeh-v1.0) | ۶٫۹M | نسخه فوق‌سبک — حتی روی ESP32-S3 اجرا می‌شود |
 | [ShenavaSanj 0.2B](https://huggingface.co/Reza2kn/ShenavaSanj-v1.0) | ۰٫۲B | مدل اهمیت واژه برای ارزیابی Semantic WER |
+
+## مدل‌های قابل انتخاب در اپ
+
+اپ از تنظیمات → تب «عمومی» → کارت «مدل تشخیص گفتار» یکی از دو مدل زیر را بار می‌کند:
+
+| مدل | کد | معماری | حجم | سرعت | دقت | هات‌وورد |
+|---|---|---|---:|---|---|---|
+| **شنوا کوچیک v1.0** (پیش‌فرض) | `shenava-koochik` | FastConformer NeMo CTC، ۱۱۴M | ~۴۴۰MB | سریع | پایه | ✓ |
+| **نیموترون استریمینگ فارسی** | `nemotron-farsi` | RNN-T (transducer)، ۶۰۰M | ~۶۶۷MB | ~۴ برابر کندتر | دقیق‌تر | ✗ |
+
+جزئیات نیموترون (معماری، دیتاست، بنچمارک، لایسنس OpenMDW 1.1): [nemotron/hf_upload/README_FA.md](../nemotron/hf_upload/README_FA.md).
 
 ## لینک‌ها
 

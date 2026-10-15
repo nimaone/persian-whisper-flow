@@ -10,7 +10,7 @@ from pathlib import Path
 APP_NAME = "WhisperFlowFarsi"  # فقط مسیر %APPDATA% و کلید رجیستری autostart — تغییرش مهاجرت تنظیمات می‌خواهد
 APP_TITLE = "دیکته‌یار"  # نام نمایشی کوتاه — نوار عنوان، تسک‌بار و tray
 APP_TITLE_FULL = "دیکته‌یار (ویسپر فلوی فارسی)"  # فرم کامل — هدر صفحه اصلی و راهنما
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.3.0"
 
 DEFAULTS = {
     "hotkey": "ctrl+shift+space",
@@ -23,6 +23,7 @@ DEFAULTS = {
     "input_device_key": None,  # کلید پایدار دستگاه پین‌شده (نام — API) — ایندکس خام بین بوت‌ها ناپایدار است
     "autostart": False,
     "model_dir": None,          # پوشه مدل دلخواه (مطلق) — None یعنی پیشفرض: کنار exe/پروژه
+    "model_id": "shenava-koochik",  # مدل فعال — شناسه‌های app/models_catalog.py
     "overlay_enabled": True,
     "num_threads": 4,
     "sound_feedback": True,      # بوق کوتاه شروع/پایان ضبط

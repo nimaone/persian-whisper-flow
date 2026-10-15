@@ -14,7 +14,7 @@ from tkinter import filedialog
 import customtkinter as ctk
 import numpy as np
 
-from app import model_download, theme, smooth_ctk
+from app import models_catalog, model_download, theme, smooth_ctk
 from app.config import (APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config,
                         model_dir, set_autostart)
 from app.recorder import (Recorder, dedupe_input_devices, detect_best_device,
@@ -28,15 +28,22 @@ SPECS_H = 20
 AUTO_STOP_LABELS = {"خاموش": 0, "۳ ثانیه": 3, "۵ ثانیه": 5, "۱۰ ثانیه": 10}
 
 
-def model_dir_status(custom: str | None, complete: bool) -> tuple[str, str]:
+def _model_file_hint(spec=None) -> str:
+    """نام فایل‌های مدل برای متن راهنما — CTC تک‌فایل، transducer چندفایل."""
+    if spec is None or not spec.subdir:
+        return "model.onnx یا tokens.txt"
+    return "فایل‌های مدل"
+
+
+def model_dir_status(custom: str | None, complete: bool, spec=None) -> tuple[str, str]:
     """(متن، رنگ) ردیف وضعیت کارت پوشه مدل — complete یعنی فایل‌های مدل موجودند.
 
-    جدا از بدنهی پنجره تا بدون ساخت UI سنجیده شود.
+    جدا از بدنه‌ی پنجره تا بدون ساخت UI سنجیده شود.
     """
     if complete:
         return "مدل کامل ✓", theme.ACCENT
     if custom:
-        return ("در این پوشه model.onnx یا tokens.txt نیست — اگر خالی باشد، "
+        return (f"در این پوشه {_model_file_hint(spec)} نیست — اگر خالی باشد، "
                 "دانلود در همین پوشه انجام می‌شود"), theme.WARN
     return ("پیش‌فرض: پوشه کنار برنامه — اگر مدل آنجا نباشد، "
             "در اولین اجرا دانلود می‌شود"), theme.FG_DIM
@@ -297,8 +304,10 @@ def open_settings(parent_root, app=None):
 
     # --- کارت پوشه مدل ---
     cmod = card(t_general, "پوشه مدل تشخیص گفتار")
-    # None یعنی پیشفرض (پوشه کنار برنامه/exe) — قرینهی model_dir همین پروژه
+    # None یعنی پیشفرض (پوشه کنار برنامه/exe) — قرینه‌ی model_dir همین پروژه
     model_dir_custom = [cfg.get("model_dir") or None]
+    # مدل فعال — با تغییر از dropdown همین کارت و کارت «مدل تشخیص گفتار» عوض می‌شود
+    sel_model = [models_catalog.get(cfg.get("model_id"))]
     model_path_lbl = ctk.CTkLabel(cmod, text="", font=(fam, 12),
                                   text_color=theme.FG, anchor="e")
     model_path_lbl.pack(fill="x")
@@ -306,8 +315,9 @@ def open_settings(parent_root, app=None):
     def _model_status_update():
         d = model_dir(model_dir_custom[0])
         txt, color = model_dir_status(model_dir_custom[0],
-                                      model_download.is_complete(d))
-        model_path_lbl.configure(text=str(d))
+                                      model_download.is_complete(d, sel_model[0]),
+                                      sel_model[0])
+        model_path_lbl.configure(text=str(sel_model[0].resolve_dir(d)))
         model_status.configure(text=txt, text_color=color)
 
     def _set_model_dir(folder):
@@ -316,8 +326,9 @@ def open_settings(parent_root, app=None):
         _model_status_update()
 
     def _browse_model_dir():
+        names = " و ".join(f.name for f in sel_model[0].files)
         folder = filedialog.askdirectory(
-            title="پوشه‌ای که model.onnx و tokens.txt در آن است را انتخاب کنید")
+            title=f"پوشه‌ای که {names} در آن است را انتخاب کنید")
         if folder:
             _set_model_dir(folder)
 
@@ -339,6 +350,105 @@ def open_settings(parent_root, app=None):
               "انتخاب کنید؛ «پیش‌فرض» یعنی پوشه کنار برنامه. اگر پوشه انتخابی "
               "خالی باشد، در اجرای بعد دانلود در همان‌جا انجام می‌شود. پس از "
               "ذخیره، مدل از پوشه تازه بارگذاری می‌شود.")
+
+    # --- کارت مدل تشخیص گفتار ---
+    cml = card(t_general, "مدل تشخیص گفتار")
+    model_names = [m.name for m in models_catalog.all_models()]
+    var_model = tk.StringVar(value=sel_model[0].name)
+    mmrow = ctk.CTkFrame(cml, fg_color="transparent")
+    mmrow.pack(fill="x")
+    ctk.CTkOptionMenu(mmrow, values=model_names, variable=var_model,
+                      width=200, height=34, command=lambda v: _on_model_pick(v),
+                      **menu_style).pack(side="right")
+    model_badge = ctk.CTkLabel(cml, text="", font=(fam, 13, "bold"),
+                               text_color=theme.FG, anchor="e", justify="right")
+    model_badge.pack(fill="x", pady=(6, 0))
+    model_desc = ctk.CTkLabel(cml, text="", font=(fam, 12),
+                              text_color=theme.FG_DIM, anchor="e",
+                              justify="right", wraplength=440)
+    model_desc.pack(fill="x", pady=(4, 0))
+    mstat = ctk.CTkLabel(cml, text="", font=(fam, 12), anchor="e",
+                         justify="right")
+    mstat.pack(fill="x", pady=(4, 0))
+    m_dl_btn = ctk.CTkButton(cml, text="دانلود مدل انتخابی", height=36,
+                             corner_radius=8, font=(fam, 13),
+                             fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER,
+                             text_color=theme.ON_ACCENT)
+    m_dl_btn.pack(anchor="e", pady=(8, 0))
+    dim(cml, "مدل پیشنهادی سبک و سریع است؛ مدل دقیق‌تر بزرگ‌تر و کندتر است و به "
+             "واژه‌های حساس پشتیبانی نمی‌دهد. تغییر مدل پس از «ذخیره»، موتور را "
+             "خودکار بازسازی می‌کند.")
+
+    model_enable_sync = []  # توابعی که با تغییر مدل، فعال/غیرفعال می‌شوند
+
+    def _model_by_name(name: str):
+        return next((m for m in models_catalog.all_models() if m.name == name),
+                    models_catalog.default_model())
+
+    def _refresh_model_card():
+        spec = sel_model[0]
+        model_badge.configure(text=f"{spec.name} — {spec.approx_size}")
+        model_desc.configure(text=f"{spec.description}  —  سرعت: {spec.speed}، "
+                                  f"دقت: {spec.accuracy}")
+        base = model_dir(model_dir_custom[0])
+        if model_download.is_complete(base, spec):
+            mstat.configure(text="وضعیت: آماده", text_color=theme.ACCENT)
+            m_dl_btn.configure(state="disabled")
+        else:
+            mstat.configure(text="وضعیت: دانلود نشده", text_color=theme.DANGER)
+            m_dl_btn.configure(state="normal")
+
+    def _apply_model_enable():
+        transducer = sel_model[0].kind == "transducer"
+        for cb in model_enable_sync:
+            try:
+                cb(transducer)
+            except Exception:
+                pass
+
+    def _on_model_pick(name):
+        sel_model[0] = _model_by_name(name)
+        var_model.set(sel_model[0].name)
+        _refresh_model_card()
+        _model_status_update()
+        _apply_model_enable()
+
+    def _do_model_download():
+        spec = sel_model[0]
+        base = model_dir(model_dir_custom[0])
+        m_dl_btn.configure(state="disabled")
+        mstat.configure(text="شروع دانلود…", text_color=theme.FG_DIM)
+
+        def prog(name: str, done: int, total: int):
+            pct = int(done * 100 / total) if total else 0
+            try:
+                win.after(0, lambda: mstat.configure(
+                    text=f"{name} — {pct}٪", text_color=theme.FG_DIM))
+            except Exception:
+                pass
+
+        def worker():
+            try:
+                ok, msg = model_download.download_for(base, spec, prog)
+            except Exception as ex:
+                ok, msg = False, str(ex)
+
+            def done_ui():
+                if ok:
+                    mstat.configure(text="دانلود کامل شد ✓", text_color=theme.ACCENT)
+                else:
+                    mstat.configure(text=str(msg)[:60], text_color=theme.DANGER)
+                _refresh_model_card()
+
+            try:
+                win.after(0, done_ui)
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    m_dl_btn.configure(command=_do_model_download)
+    _refresh_model_card()  # وضعیت اولیه‌ی کارت مدل پیش از هر تعامل
 
     # ================= تب میکروفون =================
     t_mic = tabview.tab("میکروفون")
@@ -652,9 +762,10 @@ def open_settings(parent_root, app=None):
 
     cs = card(t_adv, "متن زنده پایدار — آزمایشی")
     var_stable_live = tk.BooleanVar(value=bool(cfg.get("stable_live")))
-    switch_row(cs, "قفل واژه‌های قطعی (رأی بین‌پنجره‌ای + امتیاز اطمینان)",
-               var_stable_live, pady=(0, 6),
-               command=lambda: _sync_enroll_ui())
+    sw_stable, lbl_stable = switch_row(
+        cs, "قفل واژه‌های قطعی (رأی بین‌پنجره‌ای + امتیاز اطمینان)",
+        var_stable_live, pady=(0, 6),
+        command=lambda: _sync_enroll_ui())
     dim(cs, "واژه فقط وقتی قطعی می‌شود که در پنجره‌های پیاپی پایدار باشد، رقیب هم‌زمان نداشته باشد و از لبه خارج نشده باشد؛ نوسان نمایش کمتر می‌شود")
     dim(cs, "نمایش زنده = کل متن قفل‌شده + پنجره‌ی جاری؛ واژه‌های هنوز قطعی‌نشده کم‌رنگ‌تر دیده می‌شوند")
     dim(cs, "متن نهایی از مسیر جداگانه ساخته می‌شود و تحت تأثیر نیست؛ خروجی ممکن است کمی با حالت پیش‌فرض متفاوت باشد")
@@ -663,12 +774,28 @@ def open_settings(parent_root, app=None):
 
     ch_hw = card(t_adv, "واژه‌های حساس (هات‌وورد) — آزمایشی")
     var_hotword = tk.BooleanVar(value=bool(cfg.get("hotword_boost")))
-    switch_row(ch_hw, "تقویت واژه‌های مشخص هنگام تشخیص", var_hotword, pady=(0, 6))
+    sw_hotword, lbl_hotword = switch_row(
+        ch_hw, "تقویت واژه‌های مشخص هنگام تشخیص", var_hotword, pady=(0, 6))
     txt_hotwords = ctk.CTkTextbox(ch_hw, height=110, font=(fam, 13))
     txt_hotwords.pack(fill="x")
     txt_hotwords.insert("1.0", "\n".join(str(w) for w in (cfg.get("hotwords") or [])))
     dim(ch_hw, "هر خط یک واژه، حداقل ۲ حرف — اسم‌ها و برندهایی که مدل مدام اشتباه می‌گیرد")
     dim(ch_hw, "با روشن‌کردن، پردازش کمی کندتر می‌شود و ممکن است نشانه‌های پایانی جمله (مثل نقطه) هم درج شوند")
+    dim(ch_hw, "این قابلیت فقط با مدل CTC (شنوا کوچیک) کار می‌کند؛ با مدل دقیق‌تر "
+               "(نیموترون) خودکار غیرفعال است")
+
+    def _enable_hotword_sync(transducer: bool):
+        state = "disabled" if transducer else "normal"
+        sw_hotword.configure(state=state)
+        lbl_hotword.configure(state=state)
+        txt_hotwords.configure(state="disabled" if transducer else "normal")
+
+    def _enable_stable_sync(transducer: bool):
+        state = "disabled" if transducer else "normal"
+        sw_stable.configure(state=state)
+        lbl_stable.configure(state=state)
+
+    model_enable_sync.extend([_enable_hotword_sync, _enable_stable_sync])
 
     ce = card(t_adv, "ثبت صوتی واژه‌ها — آزمایشی")
 
@@ -1029,12 +1156,14 @@ def open_settings(parent_root, app=None):
                             command=open_enroll_dialog)
     add_btn.pack(anchor="e", pady=(6, 0))
     _sync_enroll_ui()
+    _apply_model_enable()
     rebuild_enroll_list()
 
     cm_info = card(t_adv, "درباره موتور تشخیص")
-    ctk.CTkLabel(cm_info, text="Shenava-Koochik v1.0", font=(fam, 13, "bold"),
+    ctk.CTkLabel(cm_info, text="دیکته‌یار — دو موتور sherpa-onnx", font=(fam, 13, "bold"),
                  text_color=theme.FG, anchor="e").pack(fill="x")
-    dim(cm_info, "کاملاً آفلاین — ۱۱۴ میلیون پارامتر (معماری FastConformer)")
+    dim(cm_info, "کاملاً آفلاین — شنوا کوچیک (۱۱۴M، FastConformer CTC) و نیموترون (۶۰۰M، RNN-T استریمینگ)")
+    dim(cm_info, "مدل فعال از تب «عمومی» انتخاب می‌شود؛ نیموترون دقیق‌تر ولی کندتر است")
     dim(cm_info, "کیفیت روی جملات دیکته‌شده بهتر از مکالمه آزاد است")
 
     # ================= تب راهنما (اسکرول‌شونده — محتوای بلند) =================
@@ -1049,7 +1178,7 @@ def open_settings(parent_root, app=None):
     _fa_ver = str(APP_VERSION).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
     ch = card(t_help, f"{APP_TITLE_FULL} — نسخه {_fa_ver}")
     dim(ch, "دیکته صوتی فارسی، کاملاً آفلاین — تجربه‌ای شبیه ویسپر فلو", merge=False)
-    dim(ch, "مدل شنوا کوچیک، ۱۱۴ میلیون پارامتر — هیچ داده‌ای از سیستم شما خارج نمی‌شود", merge=False)
+    dim(ch, "دو مدل قابل انتخاب: شنوا کوچیک (۱۱۴M، سبک و سریع) و نیموترون (۶۰۰M، دقیق‌تر) — هیچ داده‌ای از سیستم شما خارج نمی‌شود", merge=False)
 
     c1 = card(t_help, "استفاده سریع")
     dim(c1, "گام اول — در هر برنامه‌ای (نوت‌پد، تلگرام، مرورگر…) کلید میان‌بر را بزن", merge=False)
@@ -1069,6 +1198,9 @@ def open_settings(parent_root, app=None):
     dim(c3, "اگر میکروفون را عوض کردی، از تب میکروفون دستگاه را انتخاب کن یا حالت خودکار را نگه دار", merge=False)
     dim(c3, "اعداد حروفی خودکار به رقم تبدیل می‌شوند؛ خاموش یا روشن‌کردنش از تب درج متن است", merge=False)
     dim(c3, "اگر مدل واژه‌ای را مدام غلط می‌شنود، از تب پیشرفته آن را صوتی ثبت کن تا از این پس درست نوشته شود", merge=False)
+    dim(c3, "مدل فعال را از تب عمومی → کارت «مدل تشخیص گفتار» عوض کن؛ اگر آماده نبود از همان کارت دانلودش کن", merge=False)
+    dim(c3, "مدل نیموترون دقیق‌تر ولی کندتر است و «واژه‌های حساس» و «متن زنده پایدار» رویش فعال نیست", merge=False)
+    dim(c3, "پوشه مدل را هم از تب عمومی عوض کن؛ پیش‌فرض پوشه کنار برنامه است و اگر مدل آنجا نباشد در اولین اجرا دانلود می‌شود", merge=False)
 
     # ================= دکمه‌های ثابت پایین (pack در بالای فایل انجام شد) =================
     def _sync(data: dict):
@@ -1096,6 +1228,10 @@ def open_settings(parent_root, app=None):
         _sync_enroll_ui()
         txt_hotwords.delete("1.0", "end")
         txt_hotwords.insert("1.0", "\n".join(str(w) for w in (data.get("hotwords") or [])))
+        sel_model[0] = models_catalog.get(data.get("model_id"))
+        var_model.set(sel_model[0].name)
+        _refresh_model_card()
+        _apply_model_enable()
         _set_model_dir(data.get("model_dir"))
 
     def reset():
@@ -1126,7 +1262,7 @@ def open_settings(parent_root, app=None):
         hw_on = bool(var_hotword.get())
         hw_list = [ln.strip() for ln in txt_hotwords.get("1.0", "end").splitlines()
                    if len(ln.strip()) >= 2]
-        if hw_on and not hw_list:
+        if sel_model[0].kind != "transducer" and hw_on and not hw_list:
             hk_hint.configure(text="حالت واژه‌های حساس روشن است ولی هیچ واژه‌ای وارد نشده",
                               text_color=theme.DANGER)
             return
@@ -1134,6 +1270,7 @@ def open_settings(parent_root, app=None):
         cfg.set("hotwords", hw_list)
         cfg.set("stable_live", bool(var_stable_live.get()))
         cfg.set("enroll_alias", bool(var_enroll.get()))
+        cfg.set("model_id", sel_model[0].id)
         cfg.set("model_dir", model_dir_custom[0] or None)
         cfg.save()
         set_autostart(var_autostart.get())

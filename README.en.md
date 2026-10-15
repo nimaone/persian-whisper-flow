@@ -11,6 +11,8 @@
 Farsi (Persian) speech-to-text dictation, fully offline and local — triggered by a global hotkey from any app. A Wispr Flow–like experience, without a single byte of audio ever leaving your machine.
 
 > 💚 **Special thanks to [Reza2kn](https://github.com/Reza2kn)**, creator of the [Shenava Koochik v1.0](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0) model that powers this app. This project simply would not exist without their open, high-quality model. If you find this app useful, please also star the model and the [Shenava-1 project](https://github.com/Reza2kn/shenava-1).
+>
+> 🙏 **And thanks to [mallahyari (mehdi-hf)](https://huggingface.co/mehdi-hf/nemotron-asr-streaming-farsi)**, creator of the Persian fine-tune of [Nemotron Streaming](https://huggingface.co/Nimaone/nemotron-asr-streaming-farsi-onnx) (based on [NVIDIA nemotron-3.5-asr-streaming-0.6b](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b)), now available as the "more accurate" model.
 
 <div align="center">
 <a href="docs/demo.mp4"><img src="docs/demo-poster.jpg" width="640" alt="DikteYar video demo"></a>
@@ -24,14 +26,15 @@ https://github.com/user-attachments/assets/b8c6a8cd-9f77-40a1-adb9-305340b48e58
 
 https://github.com/user-attachments/assets/070fce67-3225-4949-b35c-9d734daae93b
 
-- **Model**: Shenava-Koochik v1.0 (FastConformer NeMo CTC, 114M parameters) via sherpa-onnx
+- **Models**: two selectable models — **Shenava Koochik v1.0** (FastConformer NeMo CTC, 114M, light/fast, default) and **Nemotron Streaming Persian** (RNN-T, 600M, more accurate) — both via sherpa-onnx, fully offline
 - **Language**: Python 3.12 — CustomTkinter UI (no heavyweight GUI dependencies)
 - **Platform**: Windows 10/11 **64-bit (x64)** — **this app is Windows-only** and does not run on Windows ARM (core modules are cross-platform, but the UI, text insertion and installer are built for Windows x64)
-- **Version**: 1.2.1 — Windows installer (`DikteYar-Setup-1.2.1-x64.exe`) available under [Releases](https://github.com/nimaone/persian-whisper-flow/releases/latest)
+- **Version**: 1.3.0 — Windows installer (`DikteYar-Setup-1.3.0-x64.exe`) available under [Releases](https://github.com/nimaone/persian-whisper-flow/releases/latest)
 
 ## Features
 
 - Changeable global hotkey + live text overlay window next to the mouse cursor
+- Choose the ASR model from Settings (light Shenava / more accurate Nemotron), download it, and change the model folder without reinstalling
 - Voice punctuation commands (period, comma, quotes, newline, delete last word)
 - Auto-stop after silence (configurable: off/3/5/10 seconds)
 - Short start/stop recording beeps
@@ -58,18 +61,42 @@ https://github.com/user-attachments/assets/070fce67-3225-4949-b35c-9d734daae93b
 ```bash
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python download_model.py   # fetch model.onnx + tokens.txt (see below)
+.venv\Scripts\python download_model.py   # fetch the default model (see below)
 .venv\Scripts\python app\main.py
 ```
 
-### Getting the model (~438 MB)
+Two UIs are available — same capture/transcribe logic, different shell:
 
-The ASR model is not stored in this repository. Fetch it either way:
+```bash
+.venv\Scripts\python app\main.py          # current UI (CustomTkinter)
+.venv\Scripts\python -m flet_ui.run       # new UI (Flet) — full app
+.venv\Scripts\python -m flet_ui.run demo  # UI only, no model/microphone
+```
 
-1. **Automatic (recommended)** — run `download_model.py` as shown above. It first tries this repo's GitHub Releases, then falls back to HuggingFace.
-2. **Manual** — download `model.onnx` and `tokens.txt` from [HuggingFace: Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) and place them in the `model/` folder.
+> The new Flet UI follows the same lifecycle: no model → first-run dialog to choose/download a model → main app; minimize → tray, close → full exit.
 
-> Note for users in Iran: huggingface.co may be unreachable without a VPN/proxy; the script's GitHub Releases fallback (or a proxy) helps there.
+### Getting a model
+
+The ASR models are not stored in this repository. Pick one and fetch it with the CLI:
+
+```bash
+.venv\Scripts\python download_model.py                 # default model (Shenava Koochik)
+.venv\Scripts\python download_model.py nemotron-farsi  # more accurate model (Nemotron)
+.venv\Scripts\python download_model.py --list          # list available models
+```
+
+| Model | Architecture | Size | Speed | Accuracy | Hotwords |
+|---|---|---|---:|---|---|
+| **Shenava Koochik v1.0** (default) | FastConformer NeMo CTC, 114M | ~440 MB | fast | baseline | ✓ |
+| **Nemotron Streaming Persian** | RNN-T, 600M | ~667 MB | ~4× slower | more accurate | ✗ |
+
+- Shenava files land in `model/` (`model.onnx` + `tokens.txt`); Nemotron files land in `model/nemotron/` (`encoder/decoder/joiner.int8.onnx` + `tokens.txt`).
+- Automatic download first tries this repo's GitHub Releases, then falls back to HuggingFace.
+- **Manual** — grab the files from HuggingFace: [Shenava](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) · [Nemotron](https://huggingface.co/Nimaone/nemotron-asr-streaming-farsi-onnx), and place them in the folders above.
+- Switch the active model anytime in Settings → General → the "Speech recognition model" card (the engine rebuilds on Save).
+- Nemotron is a transducer: hotword boosting and the "stable live text" mode do not apply to it.
+
+> Note for users in Iran: huggingface.co may be unreachable without a VPN/proxy; the GitHub Releases path (or a proxy) helps there.
 
 ## Usage
 
@@ -97,7 +124,7 @@ Note: single words that also occur in normal speech (like «سوال») are neve
 
 Tray menu → "تنظیمات" (Settings). Five tabs (changes apply on "ذخیره"/Save; "بازنشانی"/Reset restores defaults) — the customtkinter build has the same model-folder card:
 
-- **General (عمومی)**: hotkey capture, start/stop beeps, live overlay + its font size, run at startup, **model folder** (use "مرور…"/Browse to point at a folder containing `model.onnx` and `tokens.txt`; "پیش‌فرض"/Default is the folder next to the app — an empty chosen folder gets the download, and the change reloads the model on save)
+- **General (عمومی)**: hotkey capture, start/stop beeps, live overlay + its font size, run at startup, **speech recognition model** (pick light Shenava or more accurate Nemotron + "Download selected model"), **model folder** (use "مرور…"/Browse to point at a folder containing the model files; "پیش‌فرض"/Default is the folder next to the app — an empty chosen folder gets the download, and the change reloads the model on save)
 - **Microphone (میکروفون)**: input device ("خودکار"/Auto = strongest-signal mic probed at recording start), live spectral test, auto-stop on silence
 - **Text insertion (درج متن)**: insertion method (clipboard recommended / direct typing), clipboard restore, enable/disable voice commands, Persian ITN
 - **Advanced (پیشرفته)**: model inference threads (applied after restart), engine about
@@ -106,10 +133,15 @@ Tray menu → "تنظیمات" (Settings). Five tabs (changes apply on "ذخیر
 ## Project layout
 
 ```
-model/              ASR model (model.onnx + tokens.txt) — downloaded, not committed
+model/              active ASR model (Shenava: model.onnx + tokens.txt / Nemotron: model/nemotron/)
 app/
   main.py           entry point — tray + hotkey + UI loop + silence auto-stop
-  asr.py            sherpa-onnx engine + live/final transcription
+  asr.py            sherpa-onnx CTC engine + live/final transcription
+  asr_nemotron.py   Nemotron engine / streaming session (RNN-T, sherpa-onnx)
+  models_catalog.py model catalog (id/kind/files/download URLs/display metadata)
+  engine_factory.py build the active engine based on the selected model (CTC or transducer)
+  model_download.py download files for the selected model + partial-download guard
+  first_run.py      first-run dialog: choose/download a model (CTk build)
   recorder.py       sounddevice capture + incremental 16kHz resample + mic detection
   overlay.py        frameless rounded live overlay (never steals focus)
   paster.py         insert at cursor: clipboard (backup/restore) or direct typing
@@ -118,8 +150,10 @@ app/
   theme.py          dark Fluent palette + icon loading
   win32.py          DWM dark/rounded windows, flashless show, min/max dialogs
   control_window.py main window (minimize → tray)
-  settings_ui.py    five-tab settings + hotkey capture + mic test + help
+  settings_ui.py    five-tab settings + model picker + hotkey capture + mic test
   fonts.py          per-process Vazirmatn font registration (AddFontResourceEx)
+flet_ui/            new Flet UI — entry point: run.py (`python -m flet_ui.run`)
+download_model.py   model download CLI (selected model or --list)
 assets/             logo (logo.png / logo.ico) + Vazirmatn font
 spikes/             CLI test tools
 ```
@@ -132,7 +166,7 @@ spikes/             CLI test tools
 - Mic auto-detection: all input devices are probed with a 0.35 s signal test and the strongest is picked.
 - Clipboard insertion restores the previous clipboard content afterwards (~600 ms wait for slow apps like Electron).
 - Windows get dark title bars and rounded corners via DWM and appear with alpha-fade (no white flash).
-- Settings live in `%APPDATA%\WhisperFlowFarsi\settings.json`. Keys include `hotkey`, `paste_method`, `voice_commands`, …, `stable_live`, and `model_dir` (custom model folder — empty/`null` means the default next to the app).
+- Settings live in `%APPDATA%\WhisperFlowFarsi\settings.json`. Keys include `hotkey`, `paste_method`, `voice_commands`, …, `stable_live`, `model_id` (active model id — default `shenava-koochik`, alternative `nemotron-farsi`), and `model_dir` (custom model folder — empty/`null` means the default next to the app).
 - **Persian ITN**: spoken numbers («بیست و سه», «سی‌وپنج») are converted to digits (۲۳, ۳۵) on insertion — toggleable in Settings. Small standalone numbers («یک», «هشت») intentionally stay as words.
 
 ## Limitations
@@ -159,7 +193,7 @@ spikes/             CLI test tools
 Output: `dist/DikteYar/` — a folder you can zip as a portable build. Notes:
 
 - **onedir, not onefile** — instant startup; onefile extracts ~150 MB to temp on every launch and misbehaves with keyboard hooks and antivirus.
-- **The model is not bundled** (light installer) — on first run a dialog offers an automatic download from GitHub Releases (~440 MB) or manual selection of a folder containing the files; the download goes to the folder chosen in settings. The model folder can also be changed later from the General settings tab.
+- **The model is not bundled** (light installer) — on first run a dialog asks you to pick a model (**Shenava Koochik** ~440 MB default/fast or **Nemotron** ~667 MB more accurate) then auto-downloads it, or lets you manually select a folder containing the files; the download goes to the folder chosen in settings. Both the model and the model folder can be changed later from the General settings tab.
 - `version_info.txt` provides the Windows version resource (name/version/icon in file Properties).
 - For a full local test, copy `model/` next to `DikteYar.exe` to skip the first-run dialog.
 
@@ -170,12 +204,14 @@ winget install JRSoftware.InnoSetup
 "C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\dikteyar.iss
 ```
 
-Output: `installer/Output/DikteYar-Setup-1.2.1-x64.exe` (~36 MB). Highlights: **per-user** install into `%LOCALAPPDATA%\Programs\DikteYar` (no admin required), optional desktop shortcut, run-at-startup checkbox, and the model is excluded from the payload so the installer stays light even if you copied it next to the exe for testing.
+Output: `installer/Output/DikteYar-Setup-1.3.0-x64.exe` (~36 MB). Highlights: **per-user** install into `%LOCALAPPDATA%\Programs\DikteYar` (no admin required), optional desktop shortcut, run-at-startup checkbox, and the model is excluded from the payload so the installer stays light even if you copied it next to the exe for testing.
 
 ## License & Credits
 
 - This app's code ("DikteYar"): **Apache-2.0** — see [LICENSE](LICENSE) (same family as the model's license)
 - The "Shenava Koochik v1.0" model by Reza2kn: **Apache-2.0** — see [model/LICENSE](model/LICENSE)
   · [sherpa-onnx model repo](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) · [Shenava-1 project](https://github.com/Reza2kn/shenava-1)
+- The "Nemotron Streaming Persian" model (sherpa-onnx int8) by mallahyari (mehdi-hf): **OpenMDW 1.1** — fine-tuned from [mehdi-hf/nemotron-asr-streaming-farsi](https://huggingface.co/mehdi-hf/nemotron-asr-streaming-farsi) on the [NVIDIA nemotron-3.5-asr-streaming-0.6b](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) architecture
+  · [ONNX repo](https://huggingface.co/Nimaone/nemotron-asr-streaming-farsi-onnx) · [full details](nemotron/hf_upload/README.md)
 - Full model details (architecture, training data, metrics): [model/README.md](model/README.md)
 - Third-party attributions: [NOTICE](NOTICE)

@@ -21,6 +21,26 @@ under the Apache License, Version 2.0; see model/LICENSE for the full
 license text. The model is used unmodified.
 
 --------------------------------------------------------------------
+This product can also use the "Nemotron Streaming Persian" automatic
+speech recognition model (sherpa-onnx int8 export, downloaded on demand,
+not bundled), a Persian fine-tune by mallahyari / mehdi-hf of NVIDIA's
+nemotron-3.5-asr-streaming-0.6b architecture, licensed under OpenMDW 1.1.
+No model weights are redistributed by this project; they are downloaded
+directly from the sources below.
+
+  Fine-tuned model (source fine-tune):
+    https://huggingface.co/mehdi-hf/nemotron-asr-streaming-farsi
+
+  ONNX export used by this app:
+    https://huggingface.co/Nimaone/nemotron-asr-streaming-farsi-onnx
+
+  Base architecture (NVIDIA):
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+
+  License (OpenMDW 1.1):
+    https://openmdw.ai/license/1-1/
+
+--------------------------------------------------------------------
 Third-party runtime dependencies (kept unmodified):
 
   sherpa-onnx        Apache License 2.0        https://github.com/k2-fsa/sherpa-onnx
