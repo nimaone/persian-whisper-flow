@@ -233,14 +233,14 @@ class BackendModelDir(unittest.TestCase):
     def test_engine_loader_uses_custom_folder(self):
         app = self._bare_app(model_dir=r"D:\models\persian")
         seen = {}
-        with mock.patch("flet_ui.backend.load_engine", side_effect=lambda **kw: seen.update(kw) or object()):
+        with mock.patch("app.engine_factory.load_engine", side_effect=lambda **kw: seen.update(kw) or object()):
             app._default_engine_loader()
         self.assertEqual(seen.get("model_dir"), Path(r"D:\models\persian"))
 
     def test_engine_loader_default_folder(self):
         app = self._bare_app()
         seen = {}
-        with mock.patch("flet_ui.backend.load_engine", side_effect=lambda **kw: seen.update(kw) or object()):
+        with mock.patch("app.engine_factory.load_engine", side_effect=lambda **kw: seen.update(kw) or object()):
             app._default_engine_loader()
         self.assertEqual(seen.get("model_dir"), model_dir())
 
