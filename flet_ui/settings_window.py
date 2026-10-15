@@ -17,6 +17,7 @@ import numpy as np
 
 from app.config import (APP_TITLE, APP_TITLE_FULL, APP_VERSION, DEFAULTS, Config,
                         model_dir)
+from app import models_catalog, model_download
 from flet_ui import theme as t
 
 REC_MAX_SEC = 10.0  # سقف ایمنی ضبط ثبت واژه — توقف خودکار
@@ -95,6 +96,7 @@ class SettingsWindow:
             self._tab_general(), self._tab_mic(), self._tab_insert(),
             self._tab_advanced(), self._tab_help(),
         ]
+        self._apply_model_enable()  # هات‌وورد/متن پایدار با مدل transducer غیرفعال شود
         self.tab_bar = ft.TabBar(
             tabs=[ft.Tab(label=n) for n in tab_names],
             label_text_style=t.fam("bold", 13),
@@ -163,6 +165,7 @@ class SettingsWindow:
     # ================================================= عمومی
     def _tab_general(self):
         cfg = self.cfg
+        self._sel_model = models_catalog.get(cfg.get("model_id"))
         # فقط‌خواندنی — ترکیب با کیبورد کپچر می‌شود، تایپ دستی نه
         # (قرینه‌ی bind("<Key>", capture_hotkey) در CTk)
         self.var_hotkey = ft.TextField(
@@ -217,7 +220,8 @@ class SettingsWindow:
         # self._model_dir_custom نگه داشته میشود — None یعنی پیشفرض کنار برنامه
         self._model_dir_custom = cfg.get("model_dir") or None
         self.model_path = ft.TextField(
-            value=str(model_dir(self._model_dir_custom)), read_only=True,
+            value=str(self._sel_model.resolve_dir(model_dir(self._model_dir_custom))),
+            read_only=True,
             bgcolor=t.SURFACE_2, border_color=t.BORDER, border_radius=8,
             text_style=t.fam("Regular", 11), height=38, rtl=True, expand=True,
         )
@@ -242,8 +246,102 @@ class SettingsWindow:
         )
         self._model_status_update()
 
-        return ft.Column([c_hotkey, c_live, c_model], spacing=10, expand=True,
+        # ---------- مدل تشخیص گفتار (انتخاب/دانلود) ----------
+        self.var_model = t.dropdown(
+            [m.name for m in models_catalog.all_models()],
+            self._sel_model.name, on_change=self._on_model_pick,
+            width=200, height=36)
+        self.model_badge = ft.Text("", style=t.fam("bold", 13), color=t.FG,
+                                   text_align=ft.TextAlign.RIGHT)
+        self.model_desc = ft.Text("", style=t.fam("Regular", 11), color=t.FG_DIM,
+                                  text_align=ft.TextAlign.RIGHT)
+        self.model_dl_status = ft.Text("", style=t.fam("Regular", 11),
+                                       text_align=ft.TextAlign.RIGHT)
+        self.model_dl_btn = ft.Button(
+            content="دانلود مدل انتخابی", on_click=self._fire_model_download,
+            height=36, bgcolor=t.ACCENT, color=t.ON_ACCENT, style=t.btn_style())
+        c_ml = t.card(
+            "مدل تشخیص گفتار",
+            ft.Row([t.row_label("مدل فعال"), self.var_model]),
+            self.model_badge,
+            self.model_desc,
+            self.model_dl_status,
+            ft.Row([self.model_dl_btn]),
+            t.dim("مدل پیشنهادی سبک و سریع است؛ مدل دقیق‌تر بزرگ‌تر و کندتر است و "
+                  "به واژه‌های حساس پشتیبانی نمی‌دهد. تغییر مدل پس از «ذخیره»، "
+                  "موتور را خودکار بازسازی می‌کند."),
+        )
+        self._refresh_model_card()
+
+        return ft.Column([c_hotkey, c_live, c_ml, c_model], spacing=10, expand=True,
                          scroll=ft.ScrollMode.AUTO)
+
+    # ---------- مدل تشخیص گفتار (تب عمومی) ----------
+    def _model_by_name(self, name: str):
+        return next((m for m in models_catalog.all_models() if m.name == name),
+                    models_catalog.default_model())
+
+    def _on_model_pick(self, e):
+        self._sel_model = self._model_by_name(e.control.value)
+        self._refresh_model_card()
+        self._model_status_update()
+        self._apply_model_enable()
+        self._safe_update(self.model_badge)
+        self._safe_update(self.model_desc)
+        self._safe_update(self.model_dl_status)
+        self._safe_update(self.model_dl_btn)
+        self._safe_update(self.model_status)
+
+    def _refresh_model_card(self):
+        spec = self._sel_model
+        self.model_badge.value = f"{spec.name} — {spec.approx_size}"
+        self.model_desc.value = (f"{spec.description}  —  سرعت: {spec.speed}، "
+                                 f"دقت: {spec.accuracy}")
+        base = model_dir(self._model_dir_custom)
+        if model_download.is_complete(base, spec):
+            self.model_dl_status.value = "وضعیت: آماده"
+            self.model_dl_status.color = t.ACCENT
+            self.model_dl_btn.disabled = True
+        else:
+            self.model_dl_status.value = "وضعیت: دانلود نشده"
+            self.model_dl_status.color = t.DANGER
+            self.model_dl_btn.disabled = False
+
+    def _apply_model_enable(self):
+        """با مدل transducer، هات‌وورد و متن پایدار (CTC‌محور) غیرفعال می‌شوند."""
+        disabled = self._sel_model.kind == "transducer"
+        for attr in ("var_hotword", "txt_hotwords", "var_stable"):
+            w = getattr(self, attr, None)
+            if w is not None:
+                w.disabled = disabled
+
+    def _fire_model_download(self, e=None):
+        spec = self._sel_model
+        base = model_dir(self._model_dir_custom)
+        self.model_dl_btn.disabled = True
+        self.model_dl_status.value = "شروع دانلود…"
+        self.model_dl_status.color = t.FG_DIM
+        self._safe_update(self.model_dl_status)
+        self._safe_update(self.model_dl_btn)
+
+        def prog(name: str, done: int, total: int):
+            pct = int(done * 100 / total) if total else 0
+            self.model_dl_status.value = f"{name} — {pct}٪"
+            self._safe_update(self.model_dl_status)
+
+        def worker():
+            try:
+                ok, msg = model_download.download_for(base, spec, prog)
+            except Exception as ex:
+                ok, msg = False, str(ex)
+            self.model_dl_status.value = ("دانلود کامل شد ✓" if ok
+                                          else str(msg)[:60])
+            self.model_dl_status.color = t.ACCENT if ok else t.DANGER
+            self._refresh_model_card()
+            self._safe_update(self.model_dl_status)
+            self._safe_update(self.model_dl_btn)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _font_slide(self, e):
         v = int(e.control.value)
@@ -255,7 +353,8 @@ class SettingsWindow:
     def _set_model_dir(self, folder: str | None):
         """تنظیم پوشه دلخواه (None = پیشفرض) + به‌روزرسانی کادر و وضعیت."""
         self._model_dir_custom = (folder or "").strip() or None
-        self.model_path.value = str(model_dir(self._model_dir_custom))
+        self.model_path.value = str(
+            self._sel_model.resolve_dir(model_dir(self._model_dir_custom)))
         self._model_status_update()
         self._safe_update(self.model_path)
         self._safe_update(self.model_status)
@@ -265,15 +364,17 @@ class SettingsWindow:
         active = model_dir(self._model_dir_custom)
         try:
             from app import model_download
-            complete = model_download.is_complete(active)
+            complete = model_download.is_complete(active, self._sel_model)
         except Exception:
             complete = False
         if complete:
             self.model_status.value = "مدل کامل ✓"
             self.model_status.color = t.ACCENT
         elif self._model_dir_custom:
-            # پوشه دلخواه ولی خالی — دانلود اجرای بعدی همانجا انجام میشود
-            self.model_status.value = ("در این پوشه model.onnx یا tokens.txt نیست — "
+            # پوشه دلخواه ولی خالی — دانلود اجرای بعدی همانجا انجام می‌شود
+            hint = ("model.onnx یا tokens.txt" if not self._sel_model.subdir
+                    else "فایل‌های مدل")
+            self.model_status.value = (f"در این پوشه {hint} نیست — "
                                        "اگر خالی باشد، دانلود در همین پوشه انجام می‌شود")
             self.model_status.color = t.WARN
         else:
@@ -299,8 +400,9 @@ class SettingsWindow:
         try:
             self.page.services.append(picker)
             self.page.update()
+            names = " و ".join(f.name for f in self._sel_model.files)
             return await picker.get_directory_path(
-                dialog_title="پوشه‌ای که model.onnx و tokens.txt در آن است را انتخاب کنید")
+                dialog_title=f"پوشه‌ای که {names} در آن است را انتخاب کنید")
         except Exception:
             return None
         finally:
@@ -1401,6 +1503,8 @@ class SettingsWindow:
             "auto_stop_sec": auto_stop_labels.get(self.var_auto_stop.value, 0),
             "hotword_boost": hw_on,
             "stable_live": bool(self.var_stable.value),
+            # مدل فعال — شناسه‌ی کاتالوگ
+            "model_id": self._sel_model.id,
             # پوشه مدل — None یعنی پیشفرض (کنار exe/پروژه)
             "model_dir": self._model_dir_custom or None,
             # از خود سوییچ — وگرنه تغییر کاربر بی‌اثر بود و مقدار دیسک
@@ -1459,7 +1563,12 @@ class SettingsWindow:
             .get(int(data.get("auto_stop_sec") or 0), "خاموش")
         self.var_hotword.value = bool(data.get("hotword_boost"))
         self.txt_hotwords.value = "\n".join(str(w) for w in (data.get("hotwords") or []))
-        # پوشه مدل — کادر مسیر فعال را نشان میدهد و مقدار دلخواه جدا نگه میشود
+        # مدل فعال — dropdown و کارت همراستا شوند
+        self._sel_model = models_catalog.get(data.get("model_id"))
+        self.var_model.value = self._sel_model.name
+        self._refresh_model_card()
+        self._apply_model_enable()
+        # پوشه مدل — کادر مسیر فعال را نشان می‌دهد و مقدار دلخواه جدا نگه می‌شود
         self._set_model_dir(data.get("model_dir"))
         # سوییچ/یادداشت ثبت صوتی با حالت پایدارِ تازه همگام شود — وگرنه
         # پس از بازنشانی، حالت کهنه‌ی سوییچ و نکته‌ی هشدار می‌ماند
@@ -1491,7 +1600,9 @@ class SettingsWindow:
         """
         if not _valid_hotkey(str(data.get("hotkey") or "").strip()):
             return ("hotkey", HK_INVALID)
-        if data.get("hotword_boost") and not data.get("hotwords"):
+        # هات‌وورد روی مدل transducer پشتیبانی نمی‌شود — اعتبارسنجی معنا ندارد
+        if data.get("model_id") and self._sel_model.kind != "transducer" \
+                and data.get("hotword_boost") and not data.get("hotwords"):
             return ("hotwords", HW_EMPTY)
         return None
 
