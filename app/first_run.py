@@ -1,11 +1,13 @@
-"""دیالوگ اولین اجرا — وقتی فایل‌های مدل کنار exe نیستند.
+"""دیالوگ اولین اجرا — وقتی فایل‌های مدل فعال کنار exe نیستند.
 
-در بسته‌ی نصب‌شده (نصب‌کننده سبک) مدل همراه اپ نیست. کاربر دو راه دارد:
-  «دانلود خودکار»  — ~۴۳۸MB از Release/HF با نوار پیشرفت
+در بسته‌ی نصب‌شده (نصب‌کننده سبک) مدل همراه اپ نیست. کاربر مدل را انتخاب
+می‌کند (شنوا کوچیک پیشنهادی / نیموترون دقیق‌تر) و دو راه دارد:
+  «دانلود خودکار»  — از Release/HF با نوار پیشرفت
   «انتخاب دستی»    — پوشه‌ای که خودش فایل‌ها را در آن گذاشته (اینترنت ایران)
 
+انتخاب مدل پس از موفقیت در تنظیمات ذخیره می‌شود تا اپ همان را بار کند.
 در سورس (بدون frozen) این دیالوگ اجرا نمی‌شود — توسعه‌دهنده مدل را
-خودش در model/ پروژه می‌گذارد.
+خودش در پوشه‌ی مدل می‌گذارد.
 """
 from __future__ import annotations
 
@@ -16,35 +18,50 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
-from app import model_download, theme
+from app import models_catalog, model_download, theme
 from app.config import APP_TITLE
 
 
 def ensure_model() -> bool:
-    """اگر مدل کامل است True. وگرنه دیالوگ می‌دهد و پس از تدارک True.
+    """اگر مدل فعال کامل است True. وگرنه دیالوگ می‌دهد و پس از تدارک True.
 
     خروج False یعنی کاربر انصراف داده و اپ باید ببندد.
     """
     from app.config import Config, model_dir
 
+    cfg = Config.load()
     # پوشه‌ی دلخواهِ ست‌شده در تنظیمات — دانلود/کپی اول اجرا همان‌جا انجام می‌شود
-    md = model_dir(Config.load().get("model_dir"))
-    if model_download.is_complete(md):
+    md = model_dir(cfg.get("model_dir"))
+    spec = models_catalog.get(cfg.get("model_id"))
+    if model_download.is_complete(md, spec):
         return True
     if not getattr(sys, "frozen", False):
         # سورس: بدون دیالوگ — همان پیام CLI
-        print(f"[model] فایل‌های مدل در {md} نیست — python download_model.py")
+        print(f"[model] فایل‌های مدل در {spec.dir(md)} نیست — python download_model.py")
         return False
-    return _dialog(md)
+    return _dialog(md, spec)
 
 
-def _dialog(md) -> bool:
+def _persist_model_id(model_id: str):
+    """ذخیره‌ی مدل انتخاب‌شده تا اپ در اجرای بعدِ همین فرآیند بخواند."""
+    from app.config import Config
+
+    try:
+        cfg = Config.load()
+        cfg.set("model_id", model_id)
+        cfg.save()
+    except Exception:
+        pass
+
+
+def _dialog(md, default_spec) -> bool:
     done_evt = threading.Event()
     result: list[bool] = [False]
+    sel = [default_spec]
 
     win = ctk.CTk()
     win.title(APP_TITLE)
-    win.geometry("480x300")
+    win.geometry("500x430")
     win.resizable(False, False)
     win.configure(bg=theme.BG)
     win.attributes("-topmost", True)
@@ -58,14 +75,29 @@ def _dialog(md) -> bool:
                  text_color=theme.FG).pack(anchor="e")
     ctk.CTkLabel(
         c, justify="right", anchor="e",
-        text=("مدل تشخیص گفتار (~۴۴۰MB) همراه نصب‌کننده نیست تا حجم دانلود کم بماند.\n"
-              "الان دانلودش می‌کنم، یا اگر خودتان فایل‌ها را دارید مسیرشان را بدهید."),
+        text=("مدل تشخیص گفتار همراه نصب‌کننده نیست تا حجم دانلود کم بماند.\n"
+              "یک مدل را انتخاب و دانلود کنید، یا اگر فایل‌ها را دارید مسیرشان را بدهید."),
         font=(fam, 12), text_color=theme.FG_DIM,
     ).pack(fill="x", pady=(8, 12))
 
+    var_choice = tk.StringVar(value=default_spec.id)
+
+    def _label(spec) -> str:
+        badge = "  (پیشنهادی)" if spec.recommended else ""
+        return (f"{spec.name}{badge} — {spec.approx_size}\n"
+                f"سرعت: {spec.speed} • دقت: {spec.accuracy}")
+
+    for spec in models_catalog.all_models():
+        ctk.CTkRadioButton(
+            c, text=_label(spec), variable=var_choice, value=spec.id,
+            font=(fam, 12), text_color=theme.FG, fg_color=theme.ACCENT,
+            hover_color=theme.ACCENT_HOVER, border_color=theme.SURFACE_3,
+            command=lambda s=spec: sel.__setitem__(0, s),
+        ).pack(anchor="e", fill="x", pady=(0, 6))
+
     prog = ctk.CTkProgressBar(c)
     prog.set(0)
-    prog.pack(fill="x", pady=(0, 4))
+    prog.pack(fill="x", pady=(6, 4))
     status = ctk.CTkLabel(c, text="", font=(fam, 11), text_color=theme.FG_DIM,
                           anchor="e", justify="right")
     status.pack(fill="x")
@@ -76,11 +108,14 @@ def _dialog(md) -> bool:
                               status.configure(text=f"{name} — {int(pct * 100)}٪")))
 
     def start_download():
+        spec = sel[0]
         dl_btn.configure(state="disabled")
         pick_btn.configure(state="disabled")
 
         def worker():
-            ok, msg = model_download.download_model(md, set_progress)
+            ok, msg = model_download.download_for(md, spec, set_progress)
+            if ok:
+                _persist_model_id(spec.id)
             result[0] = ok
             win.after(0, lambda: status.configure(
                 text="دانلود کامل شد ✓" if ok else f"{msg} — دوباره تلاش کنید یا دستی انتخاب کنید",
@@ -94,22 +129,25 @@ def _dialog(md) -> bool:
         threading.Thread(target=worker, daemon=True).start()
 
     def pick_folder():
+        spec = sel[0]
+        names = [f.name for f in spec.files]
         folder = filedialog.askdirectory(
-            title="پوشه‌ای که model.onnx و tokens.txt در آن است را انتخاب کنید")
+            title=f"پوشه‌ای که {', '.join(names)} در آن است را انتخاب کنید")
         if not folder:
             return
         import shutil
         from pathlib import Path
         src = Path(folder)
-        missing = [n for n in model_download.FILE_NAMES if not (src / n).exists()]
+        missing = [n for n in names if not (src / n).exists()]
         if missing:
             status.configure(text=f"در این پوشه {', '.join(missing)} نیست", text_color=theme.DANGER)
             return
-        for n in model_download.FILE_NAMES:
-            target = md / n
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if src.resolve() != md.resolve():
-                shutil.copy2(src / n, target)
+        target = spec.dir(md)
+        target.mkdir(parents=True, exist_ok=True)
+        for n in names:
+            if src.resolve() != target.resolve():
+                shutil.copy2(src / n, target / n)
+        _persist_model_id(spec.id)
         result[0] = True
         status.configure(text="فایل‌ها آماده شد ✓", text_color=theme.ACCENT)
         win.after(400, lambda: (win.destroy(), done_evt.set()))

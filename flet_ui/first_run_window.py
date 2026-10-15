@@ -19,14 +19,23 @@ from pathlib import Path
 
 import flet as ft
 
-from app import model_download
+from app import models_catalog, model_download
 from app.config import APP_TITLE, model_dir
 from flet_ui import theme as t
 
 TITLE = "فایل‌های مدل یافت نشد"
-BODY = ("مدل تشخیص گفتار (~۴۴۰MB) همراه نصب‌کننده نیست تا حجم دانلود کم بماند.\n"
-        "الان دانلودش می‌کنم، یا اگر خودتان فایل‌ها را دارید مسیرشان را بدهید.")
-PICK_TITLE = "پوشه‌ای که model.onnx و tokens.txt در آن است را انتخاب کنید"
+BODY = ("مدل تشخیص گفتار همراه نصب‌کننده نیست تا حجم دانلود کم بماند.\n"
+        "یک مدل را انتخاب و دانلود کنید، یا اگر فایل‌ها را دارید مسیرشان را بدهید.")
+PICK_TITLE = "پوشه‌ای که فایل‌های مدل در آن است را انتخاب کنید"
+
+
+def active_model_spec():
+    """مدل فعال از تنظیمات — ناشناخته/خطا → مدل پیش‌فرض."""
+    try:
+        from app.config import Config
+        return models_catalog.get(Config.load().get("model_id"))
+    except Exception:
+        return models_catalog.default_model()
 
 
 def active_model_dir() -> Path:
@@ -38,10 +47,10 @@ def active_model_dir() -> Path:
         return model_dir()
 
 
-def model_ready(md: Path | None = None) -> bool:
-    """آیا فایل‌های مدل کنار پروژه/نصب موجودند؟"""
+def model_ready(md: Path | None = None, spec=None) -> bool:
+    """آیا فایل‌های مدل فعال کنار پروژه/نصب موجودند؟"""
     d = Path(md) if md is not None else active_model_dir()
-    return model_download.is_complete(d)
+    return model_download.is_complete(d, spec or active_model_spec())
 
 
 class FirstRunWindow:
@@ -57,13 +66,34 @@ class FirstRunWindow:
         self.on_ready = on_ready
         self.on_quit = on_quit
         self.md = Path(md) if md is not None else active_model_dir()
-        # تزریق وابستگی — تست بدون شبکه و بدون دیالوگ سیستم
-        self._download = download_fn or model_download.download_model
+        self._sel = active_model_spec()
+        # تزریق وابستگی — تست بدون شبکه و بدون دیالوگ سیستم.
+        # امضای download_fn قرینه‌ی قبل (md, progress_cb) می‌ماند؛ مدل فعال
+        # از self._sel خوانده می‌شود.
+        self._download = download_fn or (
+            lambda m, cb: model_download.download_for(m, self._sel, cb))
         self._pick_dir = pick_dir_fn  # sync: () -> str | None (تست)
         self._busy = False
         self.result = False
         self._last_pct = -1
         self._build()
+
+    def _persist_model_id(self):
+        """ذخیره‌ی مدل انتخاب‌شده — اپ در اجرای همین فرآیند می‌خواند."""
+        try:
+            from app.config import Config
+            cfg = Config.load()
+            cfg.set("model_id", self._sel.id)
+            cfg.save()
+        except Exception:
+            pass
+
+    def _model_label(self, spec) -> str:
+        badge = "  (پیشنهادی)" if spec.recommended else ""
+        return f"{spec.name}{badge} — {spec.approx_size} • {spec.speed}، {spec.accuracy}"
+
+    def _on_model_change(self, e):
+        self._sel = models_catalog.get(e.control.value)
 
     # ---------- ساخت صفحه ----------
     def _build(self):
@@ -73,8 +103,8 @@ class FirstRunWindow:
         self.page.rtl = True
         self.page.padding = 24
         try:
-            self.page.window.width = 480
-            self.page.window.height = 330
+            self.page.window.width = 500
+            self.page.window.height = 400
         except Exception:
             pass
 
@@ -82,6 +112,15 @@ class FirstRunWindow:
                             text_align=ft.TextAlign.RIGHT)
         self.body = ft.Text(BODY, style=t.fam("Regular", 12), color=t.FG_DIM,
                             text_align=ft.TextAlign.RIGHT)
+        self.model_group = ft.RadioGroup(
+            content=ft.Column(
+                [ft.Radio(value=s.id, label=self._model_label(s),
+                          label_style=t.fam("Regular", 12), active_color=t.ACCENT)
+                 for s in models_catalog.all_models()],
+                spacing=2,
+            ),
+            value=self._sel.id, on_change=self._on_model_change,
+        )
         self.prog = ft.ProgressBar(value=0, color=t.ACCENT, bgcolor=t.SURFACE_2,
                                    height=6, border_radius=3)
         self.status = ft.Text("", style=t.fam("Regular", 11), color=t.FG_DIM,
@@ -108,6 +147,7 @@ class FirstRunWindow:
             pass  # MockPage بدون controls
         self.page.add(
             ft.Column([self.head, self.body], spacing=8),
+            ft.Container(self.model_group, padding=ft.Padding(left=0, top=6, right=0, bottom=6)),
             self.prog,
             self.status,
             ft.Container(btns, padding=ft.Padding(left=0, top=10)),
@@ -150,6 +190,7 @@ class FirstRunWindow:
         except Exception as ex:  # شبکه/دیسک — اپ نباید بیفتد
             ok, msg = False, str(ex)
         if ok:
+            self._persist_model_id()
             self._succeed("دانلود کامل شد ✓")
         else:
             self._busy = False
@@ -202,15 +243,18 @@ class FirstRunWindow:
 
     def _apply_folder(self, src: Path) -> bool:
         """اعتبارسنجی و کپی فایل‌های پوشه‌ی انتخابی — قرینه‌ی pick_folder در CTk."""
-        missing = [n for n in model_download.FILE_NAMES if not (src / n).exists()]
+        names = [f.name for f in self._sel.files]
+        missing = [n for n in names if not (src / n).exists()]
         if missing:
             self._fail(f"در این پوشه {', '.join(missing)} نیست")
             return False
-        for n in model_download.FILE_NAMES:
-            target = self.md / n
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if src.resolve() != self.md.resolve():
+        target_dir = self._sel.dir(self.md)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for n in names:
+            target = target_dir / n
+            if src.resolve() != target_dir.resolve():
                 shutil.copy2(src / n, target)
+        self._persist_model_id()
         self._succeed("فایل‌ها آماده شد ✓")
         return True
 
