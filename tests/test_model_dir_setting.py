@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import flet as ft
 
+from app import models_catalog
 from app.config import DEFAULTS, Config, model_dir
 from flet_ui import first_run_window as fr
 from flet_ui.backend import DictationApp
@@ -249,7 +250,10 @@ class FirstRunWithCustomDir(unittest.TestCase):
     def test_model_ready_uses_explicit_dir(self):
         with TemporaryDirectory() as d:
             write_model(Path(d))
-            self.assertTrue(fr.model_ready(Path(d)))
+            # مدل فعال قطعی (shenava) — مستقل از settings.json واقعی ماشین
+            with mock.patch.object(fr, "active_model_spec",
+                                   models_catalog.default_model):
+                self.assertTrue(fr.model_ready(Path(d)))
 
     def test_model_ready_uses_setting(self):
         with TemporaryDirectory() as d:

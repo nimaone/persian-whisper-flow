@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import flet as ft
 
-from app import paths
+from app import models_catalog, paths
 from app.config import APP_TITLE
 from flet_ui import first_run_window as fr
 from flet_ui.first_run_window import FirstRunWindow, model_ready, TITLE, BODY
@@ -60,6 +60,16 @@ def fake_download(ok=True, msg="مدل کامل است", pct_values=(0, 50, 100)
 
 
 class ModelReady(unittest.TestCase):
+    def setUp(self):
+        # مدل فعال را قطعی کن (shenava) — وگرنه به settings.json واقعی ماشین
+        # وابسته می‌شود و اگر کاربر مدل نیموترون را انتخاب کرده باشد تست می‌شکند
+        self._spec = mock.patch.object(
+            fr, "active_model_spec", models_catalog.default_model)
+        self._spec.start()
+
+    def tearDown(self):
+        self._spec.stop()
+
     def test_true_when_both_files_exist(self):
         with TemporaryDirectory() as d:
             write_model(Path(d))
@@ -78,6 +88,10 @@ class FirstRunBuild(unittest.TestCase):
         self.page = MockPage()
         self.ready = []
         self.quit_calls = []
+        # مدل فعال قطعی (shenava) — مستقل از settings.json واقعی
+        self._spec = mock.patch.object(
+            fr, "active_model_spec", models_catalog.default_model)
+        self._spec.start()
 
     def _win(self, **kw):
         self.tmp = TemporaryDirectory()
@@ -86,6 +100,7 @@ class FirstRunBuild(unittest.TestCase):
                               on_quit=lambda: self.quit_calls.append(1), **kw)
 
     def tearDown(self):
+        self._spec.stop()
         tmp = getattr(self, "tmp", None)
         if tmp is not None:
             tmp.cleanup()
